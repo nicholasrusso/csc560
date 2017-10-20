@@ -34,7 +34,7 @@ PyObject *doParseJson_wrapper(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef myPGParseMethods[] = {
-		{"do_parse", doParseJson_wrapper, METH_VARARGS, "Parse a PostgreSQL statement"},
+		{"queryToJsonTree", doParseJson_wrapper, METH_VARARGS, "Parse a PostgreSQL statement"},
 		{NULL, NULL, 0, NULL}
 };
 
