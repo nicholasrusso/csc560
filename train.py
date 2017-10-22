@@ -6,3 +6,8 @@
   # Create index
   # Add MV to our stored database model
 
+
+def create_mv(tables):
+    table_name = '_'.join(tables)
+    data_query = "SELECT * FROM " + ','.join(tables)
+    create_query = "CREATE MATERIALIZED VIEW " + tale_name + " AS " + data_query
