@@ -1,0 +1,2 @@
+SELECT * FROM Utterances;
+SELECT * FROM Utterances join Video on Utterances.vid = Video.vid;
