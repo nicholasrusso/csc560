@@ -8,5 +8,8 @@ if __name__ == '__main__':
     print(q2)
     
     q3 = queryToJsonTree('''select count(*), department.name from employee join 
-        department on employee.deptId = id group by department.name''')
+        department on employee.deptId = id group by department.name;''')
     print(q3)
+
+    q4 = queryToJsonTree('''select * from store join receipts on store.id = receipts.storeId join lineItem on receipt.id = lineItem.receiptId;''')
+    print(q4)
