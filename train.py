@@ -1,7 +1,7 @@
 # For each query
   # Add to counter for referenced tables - tables in Join clause or tables list?
 
-# For each set of table with counters above threshold - set of tables?
+# For each set of table with counters above threshold - set of tables? does the dictionary need to keep track of what tables go together?
   # Create MV
   # Create index
   # Add MV to our stored database model
