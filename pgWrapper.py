@@ -1,25 +1,8 @@
-# TODO: replace with psycopg2 imports
-import mysql.connector
-from mysql.connector import errorcode
+import psycopg2
 
-
-class Postgres_Wrapper(object):
-    def __init__(self, host, database, user, password):
-        self.host = host
-        self.database = database
-        self.user = user
-        self.password = password
-        self.logger = logger
-        self.config = {
-            'user': self.user,
-            'password': self.password,
-            'host': self.host,
-            'database': self.database,
-            'raise_on_warnings': True,
-            'buffered': True,
-            'use_unicode': True
-        }
-        self.connection = self.connect(**self.config)
+class pgWrapper(object):
+    def __init__(self, database, user, password, host = "localhost"):
+        self.connection = self.connect(database, user, password, host)
         self.analytics = dict()
 
     def __enter__(self):
@@ -41,11 +24,11 @@ class Postgres_Wrapper(object):
         :return: None
         '''
         if exc_type:
-            self.logger.exception(
-                "MySQL Error: " + str(exc_type) + "\nTable: " + str(exc_tb) + "\nMessage: " + str(exc_val))
-            self.close()
+            raise ValueError(exc_type, exc_val)
         else:
             self.connection.commit()
+
+        self.close()
 
     def close(self):
         '''
@@ -58,15 +41,21 @@ class Postgres_Wrapper(object):
             self.connection.rollback()
             self.connection.close()
 
-    def connect(self, **new_config):
+
+    def connect(self, database, user, password, host):
         '''
         If there is an existing connection rollback any uncommitted queries and create a new connection.
-        :param new_config: mysql.connector parameters. Reference documentation for long list.
-        :return: The mysql connection
+        :return: postgres connection
         '''
         self.close()
-        return mysql.connector.connect(**new_config)
+        connection_string ="dbname=\'"+ database +\
+                               "\' user=\'" + user +\
+                               "\' host=\'" +  host +\
+                               "\' password=\'" + password + "\'"
 
-    def execute(self, query):
-        # Timer
-        return None
+        return psycopg2.connect(connection_string)
+
+# Example
+# with database("testdb", "test", "test") as db:
+#     db.execute("SELECT * FROM table1;")
+#     print(db.fetchone())
