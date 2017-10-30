@@ -9,8 +9,8 @@
 from parser import Query
 
 def create_mv(tables):
-    table_name = '_'.join(tables) # what is this? pseudo code?
-    data_query = "SELECT * FROM " + ','.join(tables)
+    table_name = '_'.join(tables) # wouldn't this just be whatever table name I want or?
+    data_query = "SELECT * FROM " + ','.join(tables) # is join a real function or do I need to execute a query that joins the tables?
     create_query = "CREATE MATERIALIZED VIEW " + table_name + " AS " + data_query
     # execute query
     # add MV to database model
