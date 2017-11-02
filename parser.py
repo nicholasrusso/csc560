@@ -4,11 +4,15 @@ from mypgparse import queryToJsonTree
 
 SELECT_STMT = 'SelectStmt'
 FROM_CLAUSE = 'fromClause'
+TARGET_LIST = 'targetList'
+RES_TARGET = 'ResTarget'
+VALUE = 'val'
 
 RELATION_NAME = 'relname'
 COLUMN_REF = 'ColumnRef'
 FIELDS = 'fields'
 JOIN_EXPR = 'JoinExpr'
+FUNC_CALL = 'FuncCall'
 
 RANGE_VAR = 'RangeVar'
 LEFT_ARG = 'larg'
@@ -39,6 +43,9 @@ class ColumnRef:
             self.table = None
             # print('ColumnRef:', self.field)
 
+    def __str__(self):
+        return self.field
+
 
 class Expression:
     def __init__(self, exprTree):
@@ -62,10 +69,19 @@ class JoinOp:
             self.joinOperator, self.rightColumn
         )
 
+    def __eq__(self, other):
+        return type(other) is JoinOp and self.leftTable == other.leftTable \
+               and self.leftColumn == other.leftColumn \
+               and self.rightTable == other.rightTable \
+               and self.rightColumn == other.rightColumn
+
 
 class JoinClause:
     def __init__(self, joinOps):
         self.joins = joinOps
+
+    def __eq__(self, other):
+        return type(other) is JoinClause and self.joins == other.joins
 
     def __str__(self):
         return '\n'.join(str(joinOp) for joinOp in self.joins)
@@ -84,11 +100,21 @@ class Query(object):
         self.parseTree = parseTree
         self.joinClause = None
         self.tables = set()
-        self.selectColumns = ["a.id", "b.id", "c.id"]
+        self.selectColumns = []
+
+        if SELECT_STMT in parseTree:
+            self.parseSelectClause(parseTree[SELECT_STMT])
+            print('Selected Columns:', str(self.selectColumns))
+        else:
+            raise KeyError('Expected select query')
 
         self.parseFromClause(parseTree)
         print('Tables:', self.tables)
         print('Joins:', str(self.joinClause))
+
+    def __eq__(self, other):
+        return type(other) is Query and self.joinClause == other.joinClause \
+               and self.tables == other.tables and self.selectColumns == other.selectColumns
 
     def parseNode(self, node):
         if FROM_CLAUSE in node:
@@ -100,10 +126,40 @@ class Query(object):
         elif RANGE_VAR in node:
             return self.parseRangeVar(node)
 
+    def parseSelectClause(self, selectStmt):
+        selectedCols = []
+        if TARGET_LIST in selectStmt:
+            targetList = selectStmt[TARGET_LIST]
+
+            for target in targetList:
+                if RES_TARGET in target:
+                    targetValue = self._parseResTarget(target[RES_TARGET])
+
+                    if targetValue is not None:
+                        selectedCols.append(targetValue)
+
+        self.selectColumns = [col.field for col in selectedCols]
+
+    def _parseResTarget(self, resTarget):
+        targetValue = None
+        if VALUE in resTarget:
+            val = resTarget[VALUE]
+
+            if COLUMN_REF in val:
+                targetValue = ColumnRef(val[COLUMN_REF])
+            # TODO: Parse function calls
+            elif FUNC_CALL in val:
+                print('Found function call:', val[FUNC_CALL])
+        return targetValue
+
     def parseFromClause(self, parseTree):
         select = parseTree[SELECT_STMT]
         fromClause = select[FROM_CLAUSE]
         self.parseJoins(fromClause)
+
+        if self.joinClause is None and len(fromClause) > 0:
+            self.tables = {self.parseRangeVar(rangeVar) for rangeVar in fromClause
+                           if RANGE_VAR in rangeVar}
 
     def parseJoins(self, fromClause):
         joins = []
@@ -219,8 +275,8 @@ class Query(object):
 
 
 if __name__ == '__main__':
-    Query('''select person.id, avg(person.age) from person
-        join employee on person.id = employee.id''')
+    # Query('''select person.id, person.age, person.name from person
+    #     join employee on person.id = employee.id''')
     # q = Query('''select Person.id, avg(Person.age) from Person
     #     join employee on Person.id = employee.id
     #     join manager on manager.emplId = employee.id''')
@@ -228,4 +284,4 @@ if __name__ == '__main__':
     #     join employee on Person.id = employee.id
     #     join manager on manager.emplId = employee.id
     #     join exec on exec.id = manager.execId''')
-    # q2 = Query('select person.id, person.age from person;')
+    q2 = Query('select person.id, person.age from person;')
