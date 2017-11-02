@@ -1,25 +1,36 @@
-# I need list of MVs with the columns in them including what table each column is from
-# A list of our Query objects should work. I think I only need the "selectColumns" parameter since it includes table names.
+# Input to me is a list of MV objects. Each MV object should have name, string query, list of table/column pairs.
 
-import timeit
+# Disclaimer: more psuedo-code than real code. Haven't actually run anything.
+def get_test_queries(file_name):
+  with open(file_name) as f:
+    test_queries = f.readlines()
+  return test_queries
+  
+def modify_queries(test_queries):
+  modified_queries = []
+  for query in test_queries:
+    editable_query = query
+    tables_cols = parse_query(query)
+    for (table,col) in tables_cols:
+      if(is_in_mv(mvs,table,col):
+         editable_query.replace(table+'.'+col, mv.name+'.'+table+'.'+col)
+    modified queries += editable_query
+  return modified_queries
 
-# Read input file
-with open('testing.txt') as f:
-  test_queries = f.readlines()
+def is_in_mv(mvs,table,col):
+  for mv in mvs:
+    if mv.fields.contains((table,col)):
+      return true
 
-# For each line
-for query in test_queries:
-  # Replace with our MV if appropriate
-  # For each MV we've made
-  #   For each column in query
-  #     If that column isn't in MV 
-  #       Break
-  #     Else if last column in query
-  #       Do replacement
-
-print("Time elapsed: "+timeit.timeit(run_queries(queries))) #Not sure if this is correct
-
+def parse_query(query):
+  tables_cols = []
+  for word in query:
+    parts = word.split('.')
+    if len(parts) == 2:
+      tables_cols += (parts[0],parts[1])
+  return tables_cols
 
 def run_queries(queries):
-      for query in queries:
-        #run
+  with database("testdb", "test", "test") as db:
+    for query in queries:
+      db.execute(query) # How are we doing timing?
