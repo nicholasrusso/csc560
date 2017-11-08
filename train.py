@@ -6,31 +6,46 @@
   # Create index
   # Add MV to our stored database model
 
-# Tester needs MV name, columns, tables
 
 from parser import Query
 
-class MaterializedView:
-    def _init_(self, queryStr):
-        self.name =
-        self.selectStr =
-        self.columns =
-        self.tables =
+class MaterializedView(object):
+    def _init_(self, view_name, select_str, tableSets):
+        self.name = view_name
+        self.selectStr = select_str
+        self.tableCols = tableSets
 
 
-def create_mv(tables):
+
+# tableSets = [(leftTable, leftCol), (rightTable, rightCol)]
+def create_mv(tableSets, joinOper):
+    tables = []
+    for table, col in tableSets:
+        tables.append(table)
+
     view_name = '_'.join(tables)
-    data_query = "SELECT * FROM " + ','.join(tables)
+
+    #'select * from person join employee on person.id = employee.id'
+    select_str = "SELECT * FROM " + ' JOIN '.join(tables) #
+    data_query = select_str + " on " + '.'.join(list(tableSets[0])) + joinOper + '.'.join(list(tableSets[1]))
+
     create_query = "CREATE MATERIALIZED VIEW " + view_name + " AS " + data_query
-    # execute query
-    # add MV to database model & output for tester?
+
+    mv = MaterializedView(view_name, select_str, tableSets)
+
+    # ADD MV TO DATABASE MODEL????
+
+    db.execute(data_query)
+
 
 
 # should indexes be made on each table in the set of tables being joined?
-def create_index(table):
-    index_name = table + '_index'
-    create_query = "CREATE INDEX " + index_name + "ON " + table # index on column name?
-    # execute query
+def create_index(table, column):
+    index_name = table + "_" + column '_index'
+    index_query = "CREATE INDEX " + index_name + "ON " + table + "(" + column + ")"
+
+    db.execute(index_query)
+
 
 
 # given a query model, for every set of tables (being joined), add to counter dict for tables being joined
@@ -42,19 +57,28 @@ def process_model(queryModel):
     for i in range(len(queryModel.joinClause.joins)):
         leftTable = joins[i].leftTable
         rightTable = joins[i].rightTable
+        leftCol = joins[i].leftCol
+        rightCol = joins[i].rightCol
+        joinOper = joins[i].joinOperator
 
-        if (leftTable, rightTable) not in tableCounts:
-            tableCounts[(leftTable, rightTable)] = 1
+        if ((leftTable, leftCol), (rightTable, rightCol)) not in tableCounts:
+            tableCounts[((leftTable, leftCol), (rightTable, rightCol))] = 1
         else:
-            curCount = tableCounts[(leftTable, rightTable)]
-            tableCounts[(leftTable, rightTable)] = curCount + 1
+            curCount = tableCounts[(leftTable, leftCol), (rightTable, rightCol)]
+            tableCounts[((leftTable, leftCol), (rightTable, rightCol), joinOper)] = curCount + 1
 
     return tableCounts
 
 
+#tableCounts is dict = {((leftTable, leftCol), (rightTable, rightCol), joinOper) -> count}
 def createViews(tableCounts, threshold):
+    # tableSet = ((leftTable, leftCol), (rightTable, rightCol), joinOper)
     for tableSet, count in tableCounts.items():
         if count > threshold:
-            create_mv(list(tableSet)) # convert to list for str.join()
-            for table in tableSet:
-                create_index(table)
+            tables = list(tableSet[:-1] ) # slices off the joinOper
+            joinOper = tableSet[-1]
+
+            create_mv(tables, joinOper)
+
+            for table, col in tables:
+                create_index(table, col)
