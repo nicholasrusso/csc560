@@ -13,6 +13,10 @@ COLUMN_REF = 'ColumnRef'
 FIELDS = 'fields'
 JOIN_EXPR = 'JoinExpr'
 FUNC_CALL = 'FuncCall'
+FUNC_NAME = 'funcname'
+FUNC_ARGS = 'args'
+AGG_STAR = 'agg_star'
+A_STAR = 'A_Star'
 
 RANGE_VAR = 'RangeVar'
 LEFT_ARG = 'larg'
@@ -30,21 +34,93 @@ LIKE = '~~'
 
 # NOTE: queryToJsonTree seems to lowercase all references (columns, tables, etc)
 
-class ColumnRef:
-    def __init__(self, columnRefTree):
-        fieldTree = columnRefTree[FIELDS]
-        fields = [field[STRING_TYPE][STR_TYPE] for field in fieldTree]
-        self.field = '.'.join(fields)
+class FuncCall:
+    def __init__(self, funcCallTree=None):
+        # print('Function call:', funcCallTree)
+        self.args = []
+        self.funcName = None
 
-        # Fields in "table.attribute" format
-        if len(fields) == 2:
-            self.table = fields[0]
-        else:
-            self.table = None
-            # print('ColumnRef:', self.field)
+        if funcCallTree is not None:
+            if FUNC_NAME in funcCallTree and len(funcCallTree[FUNC_NAME]) > 0:
+                self.funcName = funcCallTree[FUNC_NAME][0][STRING_TYPE][STR_TYPE]
+            if FUNC_ARGS in funcCallTree and len(funcCallTree[FUNC_ARGS]) > 0:
+                funcArgs = funcCallTree[FUNC_ARGS]
+
+                for arg in funcArgs:
+                    if COLUMN_REF in arg:
+                        self.args.append(ColumnRef(arg[COLUMN_REF]))
+            if AGG_STAR in funcCallTree and funcCallTree[AGG_STAR]:
+                self.args.append('*')
+
+    @staticmethod
+    def create(funcName, args):
+        func = FuncCall()
+        func.funcName = funcName
+        func.args = args
+        return func
+
+    def __str__(self):
+        return '{}({})'.format(self.funcName, ', '.join([str(arg) for arg in self.args]))
+
+    def __eq__(self, other):
+        equal = False
+
+        if other is not None and type(other) is FuncCall:
+            equal = self.funcName == other.funcName \
+                    and self.args is not None and other.args is not None \
+                    and len(self.args) == len(other.args) \
+                    and self.args == other.args
+
+        return equal
+
+
+class ColumnRef:
+    def __init__(self, columnRefTree=None):
+        if columnRefTree is not None:
+            fieldTree = columnRefTree[FIELDS]
+            fields = []
+            hasAStar = False
+
+            for field in fieldTree:
+                if A_STAR in field:
+                    hasAStar = True
+                    fields.append('*')
+                elif STRING_TYPE in field:
+                    stringField = field[STRING_TYPE]
+                    if STR_TYPE in stringField:
+                        fields.append(stringField[STR_TYPE])
+                    else:
+                        print('Cannot handle ColumnRef field:', stringField)
+            # fields = [field[STRING_TYPE][STR_TYPE] for field in fieldTree]
+            if hasAStar:
+                self.field = '*'
+            else:
+                self.field = '.'.join(fields)
+
+            # Fields in "table.attribute" format
+            if len(fields) == 2:
+                self.table = fields[0]
+            else:
+                self.table = None
+                # print('ColumnRef:', self.field)
+
+    @staticmethod
+    def create(field, table):
+        col = ColumnRef()
+        col.field = field
+        col.table = table
+        return col
 
     def __str__(self):
         return self.field
+
+    def __eq__(self, other):
+        equal = False
+
+        if other is not None and type(other) is ColumnRef:
+            equal = self.field == other.field and self.table == other.table
+
+        return equal
 
 
 class Expression:
@@ -52,7 +128,7 @@ class Expression:
         if COLUMN_REF in exprTree:
             column = exprTree[COLUMN_REF]
             # fields =
-        print('Expression:', exprTree)
+        # print('Expression:', exprTree)
 
 
 class JoinOp:
@@ -89,8 +165,12 @@ class JoinClause:
 
 class Query(object):
     def __init__(self, query):
-        print(query, '\n')
-        parseTree = json.loads(queryToJsonTree(query))
+        if type(query) is str:
+            print(query, '\n')
+            parseTree = json.loads(queryToJsonTree(query))
+        else:
+            parseTree = query
+
         if type(parseTree) is list and len(parseTree) == 1:
             parseTree = parseTree[0]
 
@@ -104,13 +184,13 @@ class Query(object):
 
         if SELECT_STMT in parseTree:
             self.parseSelectClause(parseTree[SELECT_STMT])
-            print('Selected Columns:', str(self.selectColumns))
+            # print('Selected Columns:', str(self.selectColumns))
         else:
             raise KeyError('Expected select query')
 
         self.parseFromClause(parseTree)
-        print('Tables:', self.tables)
-        print('Joins:', str(self.joinClause))
+        # print('Tables:', self.tables)
+        # print('Joins:', str(self.joinClause))
 
     def __eq__(self, other):
         return type(other) is Query and self.joinClause == other.joinClause \
@@ -138,7 +218,7 @@ class Query(object):
                     if targetValue is not None:
                         selectedCols.append(targetValue)
 
-        self.selectColumns = [col.field for col in selectedCols]
+        self.selectColumns = [col for col in selectedCols]
 
     def _parseResTarget(self, resTarget):
         targetValue = None
@@ -149,7 +229,7 @@ class Query(object):
                 targetValue = ColumnRef(val[COLUMN_REF])
             # TODO: Parse function calls
             elif FUNC_CALL in val:
-                print('Found function call:', val[FUNC_CALL])
+                targetValue = FuncCall(val[FUNC_CALL])
         return targetValue
 
     def parseFromClause(self, parseTree):
@@ -284,4 +364,6 @@ if __name__ == '__main__':
     #     join employee on Person.id = employee.id
     #     join manager on manager.emplId = employee.id
     #     join exec on exec.id = manager.execId''')
-    q2 = Query('select person.id, person.age from person;')
+    # q2 = Query('select person.id, person.age from person;')
+    # q = Query('select count(person.id) from person')
+    q = Query('select count(*) from person')

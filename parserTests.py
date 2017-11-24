@@ -6,7 +6,17 @@ class ParserTests(unittest.TestCase):
     def testSimpleQuery(self):
         query = Query('select person.id, person.age from person;')
         self.assertIsNone(query.joinClause)
-        expectedSelectCols = ['person.id', 'person.age']
+        expectedSelectCols = [ColumnRef.create('person.id', 'person'),
+                              ColumnRef.create('person.age', 'person')]
+        # expectedSelectCols = ['person.id', 'person.age']
+        self.assertEqual(query.selectColumns, expectedSelectCols)
+        expectedTables = {'person'}
+        self.assertEqual(query.tables, expectedTables)
+
+    def selectAStarQuery(self):
+        query = Query('select * from person')
+        self.assertIsNone(query.joinClause)
+        expectedSelectCols = [ColumnRef.create('*', None)]
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person'}
         self.assertEqual(query.tables, expectedTables)
@@ -16,7 +26,10 @@ class ParserTests(unittest.TestCase):
             join employee on person.id = employee.id''')
         expectedJoins = JoinClause([JoinOp('person', 'person.id', 'employee', 'employee.id', '=')])
         self.assertEqual(query.joinClause, expectedJoins)
-        expectedSelectCols = ['person.id', 'person.age', 'person.name']
+        expectedSelectCols = [ColumnRef.create('person.id', 'person'),
+                              ColumnRef.create('person.age', 'person'),
+                              ColumnRef.create('person.name', 'person')]
+        # expectedSelectCols = ['person.id', 'person.age', 'person.name']
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person', 'employee'}
         self.assertEqual(query.tables, expectedTables)
@@ -29,7 +42,9 @@ class ParserTests(unittest.TestCase):
                                     JoinOp('manager', 'manager.emplid', 'employee', 'employee.id', '=')])
         self.assertEqual(query.joinClause, expectedJoins)
         # TODO: Fix when function parsing is added
-        expectedSelectCols = ['person.id']
+        expectedSelectCols = [ColumnRef.create('person.id', 'person'),
+                              FuncCall.create('avg', [ColumnRef.create('person.age', 'person')])]
+        # expectedSelectCols = ['person.id']
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person', 'employee', 'manager'}
         self.assertEqual(query.tables, expectedTables)
@@ -44,9 +59,20 @@ class ParserTests(unittest.TestCase):
                                     JoinOp('exec', 'exec.id', 'manager', 'manager.execid', '=')])
         self.assertEqual(query.joinClause, expectedJoins)
         # TODO: Fix when function parsing added
-        expectedSelectCols = ['person.id']
+        firstSelectCol = ColumnRef.create('person.id', 'person')
+        secondSelectCol = FuncCall.create('avg', [ColumnRef.create('person.age', 'person')])
+        expectedSelectCols = [firstSelectCol, secondSelectCol]
+        # expectedSelectCols = ['person.id']
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person', 'employee', 'manager', 'exec'}
+        self.assertEqual(query.tables, expectedTables)
+
+    def testFunc(self):
+        query = Query('''select count(*) from person''')
+        expectedSelectCols = [FuncCall.create('count', ['*'])]
+        self.assertEqual(query.selectColumns, expectedSelectCols)
+        self.assertIsNone(query.joinClause)
+        expectedTables = {'person'}
         self.assertEqual(query.tables, expectedTables)
 
 
