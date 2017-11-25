@@ -13,7 +13,7 @@ OBJ_FILES := $(SRC_FILES:.c=.o)
 NOT_OBJ_FILES := src/pg_query_fingerprint_defs.o src/pg_query_fingerprint_conds.o src/pg_query_json_defs.o src/pg_query_json_conds.o src/postgres/guc-file.o src/postgres/scan.o src/pg_query_json_helper.o
 OBJ_FILES := $(filter-out $(NOT_OBJ_FILES), $(OBJ_FILES))
 
-CFLAGS  = -I. -I./src/postgres/include -Wall -Wno-unused-function -Wno-unused-value -Wno-unused-variable -fno-strict-aliasing -fwrapv -fPIC
+CFLAGS  = -I. -I./src/postgres/include -Wall -Wno-unused-function -Wno-unused-value -Wno-unused-variable -fno-strict-aliasing -fwrapv -fPIC -arch $(shell arch)
 LIBPATH = -L.
 
 PG_CONFIGURE_FLAGS = -q --without-readline --without-zlib

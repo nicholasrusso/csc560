@@ -1,4 +1,5 @@
 from os import environ
+import subprocess
 from distutils.core import setup, Extension
 
 if 'PYTHON_35_INCLUDE' in environ:
@@ -28,6 +29,16 @@ else:
         If installed from source, the default location is /usr/local/pgsql/lib''')
     exit()
 
+architecture = subprocess.check_output('arch', shell=True).decode().strip()
+print('System architecture:', architecture)
+
+if architecture == 'x86_64':
+    archLib = '-L/lib64'
+elif architecture == 'i386':
+    archLib = '-L/libi386'
+else:
+    archLib = '-L/lib64'
+
 pgParseModule = Extension('mypgparse',
                           extra_compile_args=['-Wall',
                                               '-Wno-unused-function',
@@ -36,7 +47,7 @@ pgParseModule = Extension('mypgparse',
                                               '-fno-strict-aliasing',
                                               '-fwrapv',
                                               '-fPIC',
-                                              '-L/lib64',
+                                              archLib,
                                               '-lpthread'],
                           include_dirs=[python35Include,
                                         '.',
