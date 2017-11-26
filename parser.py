@@ -134,9 +134,9 @@ class Expression:
 
 
 class BinaryOp:
-    def __init__(self, leftCol, rightCol, operator):
-        self.leftColumn = leftCol
-        self.rightColumn = rightCol
+    def __init__(self, leftExpr, rightExpr, operator):
+        self.leftColumn = leftExpr
+        self.rightColumn = rightExpr
         self.operator = operator
 
     def __eq__(self, other):
@@ -144,10 +144,21 @@ class BinaryOp:
                and self.leftColumn == other.leftColumn \
                and self.rightColumn == other.rightColumn
 
+    def __str__(self):
+        return '<BinaryOp: {} {} {}>'.format(str(self.leftColumn)
+                                             if self.leftColumn is not None
+                                             else 'NIL',
+                                             str(self.operator)
+                                             if self.operator is not None
+                                             else 'NIL',
+                                             str(self.rightColumn)
+                                             if self.rightColumn is not None
+                                             else 'NIL')
+
 
 class JoinOp(BinaryOp):
-    def __init__(self, leftTable, leftCol, rightTable, rightCol, operator):
-        BinaryOp.__init__(self, leftCol, rightCol, operator)
+    def __init__(self, leftTable, leftExpr, rightTable, rightExpr, operator):
+        BinaryOp.__init__(self, leftExpr, rightExpr, operator)
         self.leftTable = leftTable
         self.rightTable = rightTable
 
@@ -161,6 +172,15 @@ class JoinOp(BinaryOp):
         return type(other) is JoinOp and BinaryOp.__eq__(self, other) \
                and self.leftTable == other.leftTable \
                and self.rightTable == other.rightTable
+
+    @staticmethod
+    def fromBinOp(binOp, leftTable, rightTable):
+        join = None
+        if type(binOp) is BinaryOp:
+            join = JoinOp(leftTable, binOp.leftExpr,
+                          rightTable, binOp.rightExpr, binOp.operator)
+
+        return join
 
 
 class JoinClause:
@@ -201,14 +221,11 @@ class Query(object):
             self.parseSelectClause(select)
             # print('Selected Columns:', str(self.selectColumns))
             if WHERE_CLAUSE in select:
-                self.parseWhereClause(select[WHERE_CLAUSE])
+                self.whereClause = self.parseWhereClause(select[WHERE_CLAUSE])
         else:
             raise KeyError('Expected select query')
 
         self.parseFromClause(parseTree)
-
-        # print('Tables:', self.tables)
-        # print('Joins:', str(self.joinClause))
 
     def __eq__(self, other):
         return type(other) is Query and self.joinClause == other.joinClause \
@@ -216,24 +233,36 @@ class Query(object):
 
     def parseNode(self, node, expressions=[]):
         if LEFT_EXPR in node and RIGHT_EXPR in node:
-            expressions.extend(self.parseNode(node[LEFT_EXPR], expressions))
-            expressions.extend(self.parseNode(node[RIGHT_EXPR], expressions))
+            # print('Found left and right expressions')
+            left = self.parseNode(node[LEFT_EXPR], expressions)
+            right = self.parseNode(node[RIGHT_EXPR], expressions)
+            return left, right
         if FROM_CLAUSE in node:
-            expressions.append(self.parseFromClause(node[FROM_CLAUSE]))
+            return self.parseFromClause(node[FROM_CLAUSE])
         elif JOIN_EXPR in node:
-            expressions.append(self.parseSingleJoinExpr(node[JOIN_EXPR]))
+            # print('Found JOIN_EXPR')
+            return self.parseSingleJoinExpr(node[JOIN_EXPR])
         elif QUALIFIERS in node:
-            expressions.append(self.createJoinOp(node))
+            # print('Found QUALIFIERS')
+            return self.createJoinOp(node)
         elif RANGE_VAR in node:
-            expressions.append(self.parseRangeVar(node))
+            # print('Found RANGE_VAR')
+            return self.parseRangeVar(node)
         elif A_EXPR in node:
-            expressions.append()
+            # print('Found A_EXPR')
+            return self.parseAExpr(node[A_EXPR])
         elif BOOL_EXPR in node:
-            pass
+            # print('Found BOOL_EXPR')
+            return self.parseNode(node[BOOL_EXPR], expressions)
+        elif FUNC_ARGS in node:
+            # print('Found Args')
+            return [self.parseNode(arg) for arg in node[FUNC_ARGS]]
+        elif COLUMN_REF in node:
+            # print('Found ColumnRef:', node[COLUMN_REF])
+            return ColumnRef(node[COLUMN_REF])
+        print('Failed to parseNode:', str(node))
 
-        return expressions
-
-
+        return None
 
     def parseSelectClause(self, selectStmt):
         selectedCols = []
@@ -250,17 +279,13 @@ class Query(object):
         self.selectColumns = [col for col in selectedCols]
 
     def parseWhereClause(self, whereClauseTree):
-        # print(whereClauseTree)
+        # print('Parsing where clause:', whereClauseTree)
+        whereClause = self.parseNode(whereClauseTree)
 
-        if BOOL_EXPR in whereClauseTree:
-            boolExpr = whereClauseTree[BOOL_EXPR]
+        if type(whereClause) is not list:
+            whereClause = [whereClause]
 
-            if FUNC_ARGS in boolExpr and len(boolExpr[FUNC_ARGS]) > 0:
-                print('Boolean expression:', boolExpr)
-
-        elif A_EXPR in whereClauseTree:
-            aExpr = whereClauseTree[A_EXPR]
-            print('A_EXPR:', aExpr)
+        return whereClause
 
     def _parseResTarget(self, resTarget):
         targetValue = None
@@ -269,7 +294,6 @@ class Query(object):
 
             if COLUMN_REF in val:
                 targetValue = ColumnRef(val[COLUMN_REF])
-            # TODO: Parse function calls
             elif FUNC_CALL in val:
                 targetValue = FuncCall(val[FUNC_CALL])
         return targetValue
@@ -338,7 +362,42 @@ class Query(object):
         rangeVar = rangeVarExpr[RANGE_VAR]
         return rangeVar[RELATION_NAME]
 
-    def createBinOp(self, aExprTree):
+    def parseBoolExpr(self, boolExpr):
+        boolExprArgs = self.parseNode(boolExpr)
+        return boolExprArgs
+
+    def parseAExpr(self, aExprTree):
+        operator = None
+        left = None
+        right = None
+
+        if NAME in aExprTree:
+            operator = aExprTree[NAME]
+            if type(operator) is list:
+                operator = operator[0]
+            if STRING_TYPE in operator:
+                operator = operator[STRING_TYPE]
+                if STR_TYPE in operator:
+                    operator = operator[STR_TYPE]
+        if LEFT_EXPR in aExprTree and RIGHT_EXPR in aExprTree:
+            # print('Left expr:', aExprTree[LEFT_EXPR])
+            exprs = self.parseNode(aExprTree)
+            # print('Left and right:', [str(ex) for ex in exprs])
+            if len(exprs) == 2:
+                left, right = exprs
+            else:
+                raise ValueError('Failed to parse A_Expr')
+            # left = self.parseNode(aExprTree[LEFT_EXPR])
+            # if len(left) == 1:
+            #     left = left[0]
+            # print('Left:', str(left))
+            # # print('Right expr:', aExprTree[RIGHT_EXPR])
+            # right = self.parseNode(aExprTree[RIGHT_EXPR])
+            # if len(right) == 1:
+            #     right = right[0]
+            # print('Right:', [str(r) for r in right])
+
+        return BinaryOp(left, right, operator)
 
     def createJoinOp(self, joinExprTree):
         join = joinExprTree[QUALIFIERS][A_EXPR]

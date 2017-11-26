@@ -81,9 +81,33 @@ class ParserTests(unittest.TestCase):
                         and billdiscussion.bid = bill.bid
                         and billdiscussion.hid = hearing.hid
                         and utterance.pid = person.pid;''')
+        self.assertEqual(query.tables, {'utterance', 'billdiscussion', 'bill', 'hearing', 'person'})
+        expectedWhere = [BinaryOp(ColumnRef.create('utterance.did', 'utterance'),
+                                  ColumnRef.create('billdiscussion.did', 'billdiscussion'),
+                                  '='),
+                         BinaryOp(ColumnRef.create('billdiscussion.bid', 'billdiscussion'),
+                                  ColumnRef.create('bill.bid', 'bill'),
+                                  '='),
+                         BinaryOp(ColumnRef.create('billdiscussion.hid', 'billdiscussion'),
+                                  ColumnRef.create('hearing.hid', 'hearing'),
+                                  '='),
+                         BinaryOp(ColumnRef.create('utterance.pid', 'utterance'),
+                                  ColumnRef.create('person.pid', 'person'),
+                                  '=')]
+        self.assertEqual(query.whereClause, expectedWhere)
+        self.assertEqual(query.selectColumns, [ColumnRef.create('*', None)])
+        self.assertIsNone(query.joinClause)
 
     def testWhereClauseLike(self):
         query = Query('''select * from bill where bill.status like "%et%";''')
+        expectedWhere = [BinaryOp(ColumnRef.create('bill.status', 'bill'),
+                                  ColumnRef.create('%et%', None),
+                                  '~~')]
+        self.assertEqual(query.whereClause, expectedWhere)
+        expectedSelect = [ColumnRef.create('*', None)]
+        self.assertEqual(query.selectColumns, expectedSelect)
+        self.assertIsNone(query.joinClause)
+        self.assertEqual(query.tables, {'bill'})
 
 
 if __name__ == '__main__':
