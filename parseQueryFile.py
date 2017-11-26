@@ -12,7 +12,6 @@ def parseFile(fileName):
         with open(fileName, 'r') as file:
             text = file.read()
             queryTrees = loads(queryToJsonTree(text))
-            # print(queryTrees)
             for queryTree in queryTrees:
                 try:
                     queries.append(Query(queryTree))

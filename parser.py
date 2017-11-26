@@ -4,6 +4,7 @@ from mypgparse import queryToJsonTree
 
 SELECT_STMT = 'SelectStmt'
 FROM_CLAUSE = 'fromClause'
+WHERE_CLAUSE = 'whereClause'
 TARGET_LIST = 'targetList'
 RES_TARGET = 'ResTarget'
 VALUE = 'val'
@@ -24,6 +25,7 @@ LEFT_EXPR = 'lexpr'
 RIGHT_ARG = 'rarg'
 RIGHT_EXPR = 'rexpr'
 A_EXPR = 'A_Expr'
+BOOL_EXPR = 'BoolExpr'
 QUALIFIERS = 'quals'
 NAME = 'name'
 STRING_TYPE = 'String'
@@ -128,28 +130,37 @@ class Expression:
         if COLUMN_REF in exprTree:
             column = exprTree[COLUMN_REF]
             # fields =
-        # print('Expression:', exprTree)
+            # print('Expression:', exprTree)
 
 
-class JoinOp:
-    def __init__(self, leftTable, leftCol, rightTable, rightCol, joinOperator):
-        self.leftTable = leftTable
+class BinaryOp:
+    def __init__(self, leftCol, rightCol, operator):
         self.leftColumn = leftCol
-        self.rightTable = rightTable
         self.rightColumn = rightCol
-        self.joinOperator = joinOperator
+        self.operator = operator
+
+    def __eq__(self, other):
+        return isinstance(other, BinaryOp) \
+               and self.leftColumn == other.leftColumn \
+               and self.rightColumn == other.rightColumn
+
+
+class JoinOp(BinaryOp):
+    def __init__(self, leftTable, leftCol, rightTable, rightCol, operator):
+        BinaryOp.__init__(self, leftCol, rightCol, operator)
+        self.leftTable = leftTable
+        self.rightTable = rightTable
 
     def __str__(self):
         return '{} join {} on {} {} {}'.format(
             self.leftTable, self.rightTable, self.leftColumn,
-            self.joinOperator, self.rightColumn
+            self.operator, self.rightColumn
         )
 
     def __eq__(self, other):
-        return type(other) is JoinOp and self.leftTable == other.leftTable \
-               and self.leftColumn == other.leftColumn \
-               and self.rightTable == other.rightTable \
-               and self.rightColumn == other.rightColumn
+        return type(other) is JoinOp and BinaryOp.__eq__(self, other) \
+               and self.leftTable == other.leftTable \
+               and self.rightTable == other.rightTable
 
 
 class JoinClause:
@@ -177,18 +188,25 @@ class Query(object):
         if SELECT_STMT not in parseTree:
             raise ValueError('Expected a select statement')
 
+        # print(parseTree[SELECT_STMT])
+
         self.parseTree = parseTree
         self.joinClause = None
         self.tables = set()
         self.selectColumns = []
+        self.whereClause = None
 
         if SELECT_STMT in parseTree:
-            self.parseSelectClause(parseTree[SELECT_STMT])
+            select = parseTree[SELECT_STMT]
+            self.parseSelectClause(select)
             # print('Selected Columns:', str(self.selectColumns))
+            if WHERE_CLAUSE in select:
+                self.parseWhereClause(select[WHERE_CLAUSE])
         else:
             raise KeyError('Expected select query')
 
         self.parseFromClause(parseTree)
+
         # print('Tables:', self.tables)
         # print('Joins:', str(self.joinClause))
 
@@ -196,15 +214,26 @@ class Query(object):
         return type(other) is Query and self.joinClause == other.joinClause \
                and self.tables == other.tables and self.selectColumns == other.selectColumns
 
-    def parseNode(self, node):
+    def parseNode(self, node, expressions=[]):
+        if LEFT_EXPR in node and RIGHT_EXPR in node:
+            expressions.extend(self.parseNode(node[LEFT_EXPR], expressions))
+            expressions.extend(self.parseNode(node[RIGHT_EXPR], expressions))
         if FROM_CLAUSE in node:
-            return self.parseFromClause(node[FROM_CLAUSE])
+            expressions.append(self.parseFromClause(node[FROM_CLAUSE]))
         elif JOIN_EXPR in node:
-            return self.parseSingleJoinExpr(node[JOIN_EXPR])
+            expressions.append(self.parseSingleJoinExpr(node[JOIN_EXPR]))
         elif QUALIFIERS in node:
-            return self.createJoinOp(node)
+            expressions.append(self.createJoinOp(node))
         elif RANGE_VAR in node:
-            return self.parseRangeVar(node)
+            expressions.append(self.parseRangeVar(node))
+        elif A_EXPR in node:
+            expressions.append()
+        elif BOOL_EXPR in node:
+            pass
+
+        return expressions
+
+
 
     def parseSelectClause(self, selectStmt):
         selectedCols = []
@@ -219,6 +248,19 @@ class Query(object):
                         selectedCols.append(targetValue)
 
         self.selectColumns = [col for col in selectedCols]
+
+    def parseWhereClause(self, whereClauseTree):
+        # print(whereClauseTree)
+
+        if BOOL_EXPR in whereClauseTree:
+            boolExpr = whereClauseTree[BOOL_EXPR]
+
+            if FUNC_ARGS in boolExpr and len(boolExpr[FUNC_ARGS]) > 0:
+                print('Boolean expression:', boolExpr)
+
+        elif A_EXPR in whereClauseTree:
+            aExpr = whereClauseTree[A_EXPR]
+            print('A_EXPR:', aExpr)
 
     def _parseResTarget(self, resTarget):
         targetValue = None
@@ -295,6 +337,8 @@ class Query(object):
     def parseRangeVar(self, rangeVarExpr):
         rangeVar = rangeVarExpr[RANGE_VAR]
         return rangeVar[RELATION_NAME]
+
+    def createBinOp(self, aExprTree):
 
     def createJoinOp(self, joinExprTree):
         join = joinExprTree[QUALIFIERS][A_EXPR]

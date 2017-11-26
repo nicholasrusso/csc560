@@ -75,6 +75,16 @@ class ParserTests(unittest.TestCase):
         expectedTables = {'person'}
         self.assertEqual(query.tables, expectedTables)
 
+    def testSimpleWhereClause(self):
+        query = Query('''select * from utterance, billdiscussion, bill, hearing, person
+                        where utterance.did = billdiscussion.did
+                        and billdiscussion.bid = bill.bid
+                        and billdiscussion.hid = hearing.hid
+                        and utterance.pid = person.pid;''')
+
+    def testWhereClauseLike(self):
+        query = Query('''select * from bill where bill.status like "%et%";''')
+
 
 if __name__ == '__main__':
     unittest.main()

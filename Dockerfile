@@ -8,5 +8,6 @@ WORKDIR /project
 COPY . .
 WORKDIR /project/libpg_query-9.5-latest/
 RUN make python
+RUN service postgresql restart
 
 ENTRYPOINT sleep infinity
