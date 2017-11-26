@@ -5,6 +5,7 @@ from mypgparse import queryToJsonTree
 SELECT_STMT = 'SelectStmt'
 FROM_CLAUSE = 'fromClause'
 WHERE_CLAUSE = 'whereClause'
+GROUP_CLAUSE = 'groupClause'
 TARGET_LIST = 'targetList'
 RES_TARGET = 'ResTarget'
 VALUE = 'val'
@@ -38,7 +39,6 @@ LIKE = '~~'
 
 class FuncCall:
     def __init__(self, funcCallTree=None):
-        # print('Function call:', funcCallTree)
         self.args = []
         self.funcName = None
 
@@ -52,7 +52,7 @@ class FuncCall:
                     if COLUMN_REF in arg:
                         self.args.append(ColumnRef(arg[COLUMN_REF]))
             if AGG_STAR in funcCallTree and funcCallTree[AGG_STAR]:
-                self.args.append('*')
+                self.args.append(ColumnRef.create('*', None))
 
     @staticmethod
     def create(funcName, args):
@@ -93,7 +93,6 @@ class ColumnRef:
                         fields.append(stringField[STR_TYPE])
                     else:
                         print('Cannot handle ColumnRef field:', stringField)
-            # fields = [field[STRING_TYPE][STR_TYPE] for field in fieldTree]
             if hasAStar:
                 self.field = '*'
             else:
@@ -104,7 +103,6 @@ class ColumnRef:
                 self.table = fields[0]
             else:
                 self.table = None
-                # print('ColumnRef:', self.field)
 
     @staticmethod
     def create(field, table):
@@ -208,20 +206,21 @@ class Query(object):
         if SELECT_STMT not in parseTree:
             raise ValueError('Expected a select statement')
 
-        # print(parseTree[SELECT_STMT])
-
         self.parseTree = parseTree
         self.joinClause = None
         self.tables = set()
         self.selectColumns = []
-        self.whereClause = None
+        self.whereClauses = None
+        self.groupClauses = None
 
         if SELECT_STMT in parseTree:
             select = parseTree[SELECT_STMT]
             self.parseSelectClause(select)
-            # print('Selected Columns:', str(self.selectColumns))
             if WHERE_CLAUSE in select:
-                self.whereClause = self.parseWhereClause(select[WHERE_CLAUSE])
+                self.whereClauses = self.parseWhereClause(select[WHERE_CLAUSE])
+            if GROUP_CLAUSE in select:
+                self.groupClauses = [self.parseNode(groupBy)
+                                     for groupBy in select[GROUP_CLAUSE]]
         else:
             raise KeyError('Expected select query')
 
@@ -231,11 +230,11 @@ class Query(object):
         return type(other) is Query and self.joinClause == other.joinClause \
                and self.tables == other.tables and self.selectColumns == other.selectColumns
 
-    def parseNode(self, node, expressions=[]):
+    def parseNode(self, node):
         if LEFT_EXPR in node and RIGHT_EXPR in node:
             # print('Found left and right expressions')
-            left = self.parseNode(node[LEFT_EXPR], expressions)
-            right = self.parseNode(node[RIGHT_EXPR], expressions)
+            left = self.parseNode(node[LEFT_EXPR])
+            right = self.parseNode(node[RIGHT_EXPR])
             return left, right
         if FROM_CLAUSE in node:
             return self.parseFromClause(node[FROM_CLAUSE])
@@ -253,16 +252,17 @@ class Query(object):
             return self.parseAExpr(node[A_EXPR])
         elif BOOL_EXPR in node:
             # print('Found BOOL_EXPR')
-            return self.parseNode(node[BOOL_EXPR], expressions)
+            return self.parseNode(node[BOOL_EXPR])
         elif FUNC_ARGS in node:
             # print('Found Args')
             return [self.parseNode(arg) for arg in node[FUNC_ARGS]]
         elif COLUMN_REF in node:
             # print('Found ColumnRef:', node[COLUMN_REF])
             return ColumnRef(node[COLUMN_REF])
-        print('Failed to parseNode:', str(node))
+        elif FUNC_CALL in node:
+            return FuncCall(node[FUNC_CALL])
 
-        return None
+        raise ValueError('Failed to parseNode:' + str(node))
 
     def parseSelectClause(self, selectStmt):
         selectedCols = []
@@ -380,22 +380,11 @@ class Query(object):
                 if STR_TYPE in operator:
                     operator = operator[STR_TYPE]
         if LEFT_EXPR in aExprTree and RIGHT_EXPR in aExprTree:
-            # print('Left expr:', aExprTree[LEFT_EXPR])
             exprs = self.parseNode(aExprTree)
-            # print('Left and right:', [str(ex) for ex in exprs])
             if len(exprs) == 2:
                 left, right = exprs
             else:
                 raise ValueError('Failed to parse A_Expr')
-            # left = self.parseNode(aExprTree[LEFT_EXPR])
-            # if len(left) == 1:
-            #     left = left[0]
-            # print('Left:', str(left))
-            # # print('Right expr:', aExprTree[RIGHT_EXPR])
-            # right = self.parseNode(aExprTree[RIGHT_EXPR])
-            # if len(right) == 1:
-            #     right = right[0]
-            # print('Right:', [str(r) for r in right])
 
         return BinaryOp(left, right, operator)
 
@@ -455,18 +444,3 @@ class Query(object):
         if rightJoins is not None:
             joinOps.extend(rightJoins)
         return joinOps
-
-
-if __name__ == '__main__':
-    # Query('''select person.id, person.age, person.name from person
-    #     join employee on person.id = employee.id''')
-    # q = Query('''select Person.id, avg(Person.age) from Person
-    #     join employee on Person.id = employee.id
-    #     join manager on manager.emplId = employee.id''')
-    # q = Query('''select Person.id, avg(Person.age) from Person
-    #     join employee on Person.id = employee.id
-    #     join manager on manager.emplId = employee.id
-    #     join exec on exec.id = manager.execId''')
-    # q2 = Query('select person.id, person.age from person;')
-    # q = Query('select count(person.id) from person')
-    q = Query('select count(*) from person')

@@ -8,10 +8,10 @@ class ParserTests(unittest.TestCase):
         self.assertIsNone(query.joinClause)
         expectedSelectCols = [ColumnRef.create('person.id', 'person'),
                               ColumnRef.create('person.age', 'person')]
-        # expectedSelectCols = ['person.id', 'person.age']
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person'}
         self.assertEqual(query.tables, expectedTables)
+        self.assertIsNone(query.groupClauses)
 
     def selectAStarQuery(self):
         query = Query('select * from person')
@@ -20,6 +20,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person'}
         self.assertEqual(query.tables, expectedTables)
+        self.assertIsNone(query.groupClauses)
 
     def testSingleJoin(self):
         query = Query('''select person.id, person.age, person.name from person
@@ -29,10 +30,10 @@ class ParserTests(unittest.TestCase):
         expectedSelectCols = [ColumnRef.create('person.id', 'person'),
                               ColumnRef.create('person.age', 'person'),
                               ColumnRef.create('person.name', 'person')]
-        # expectedSelectCols = ['person.id', 'person.age', 'person.name']
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person', 'employee'}
         self.assertEqual(query.tables, expectedTables)
+        self.assertIsNone(query.groupClauses)
 
     def testDoubleJoin(self):
         query = Query('''select person.id, avg(person.age) from person
@@ -41,13 +42,12 @@ class ParserTests(unittest.TestCase):
         expectedJoins = JoinClause([JoinOp('person', 'person.id', 'employee', 'employee.id', '='),
                                     JoinOp('manager', 'manager.emplid', 'employee', 'employee.id', '=')])
         self.assertEqual(query.joinClause, expectedJoins)
-        # TODO: Fix when function parsing is added
         expectedSelectCols = [ColumnRef.create('person.id', 'person'),
                               FuncCall.create('avg', [ColumnRef.create('person.age', 'person')])]
-        # expectedSelectCols = ['person.id']
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person', 'employee', 'manager'}
         self.assertEqual(query.tables, expectedTables)
+        self.assertIsNone(query.groupClauses)
 
     def testTripleJoin(self):
         query = Query('''select person.id, avg(person.age) from person
@@ -58,22 +58,22 @@ class ParserTests(unittest.TestCase):
                                     JoinOp('manager', 'manager.emplid', 'employee', 'employee.id', '='),
                                     JoinOp('exec', 'exec.id', 'manager', 'manager.execid', '=')])
         self.assertEqual(query.joinClause, expectedJoins)
-        # TODO: Fix when function parsing added
         firstSelectCol = ColumnRef.create('person.id', 'person')
         secondSelectCol = FuncCall.create('avg', [ColumnRef.create('person.age', 'person')])
         expectedSelectCols = [firstSelectCol, secondSelectCol]
-        # expectedSelectCols = ['person.id']
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person', 'employee', 'manager', 'exec'}
         self.assertEqual(query.tables, expectedTables)
+        self.assertIsNone(query.groupClauses)
 
     def testFunc(self):
         query = Query('''select count(*) from person''')
-        expectedSelectCols = [FuncCall.create('count', ['*'])]
+        expectedSelectCols = [FuncCall.create('count', [ColumnRef.create('*', None)])]
         self.assertEqual(query.selectColumns, expectedSelectCols)
         self.assertIsNone(query.joinClause)
         expectedTables = {'person'}
         self.assertEqual(query.tables, expectedTables)
+        self.assertIsNone(query.groupClauses)
 
     def testSimpleWhereClause(self):
         query = Query('''select * from utterance, billdiscussion, bill, hearing, person
@@ -94,20 +94,53 @@ class ParserTests(unittest.TestCase):
                          BinaryOp(ColumnRef.create('utterance.pid', 'utterance'),
                                   ColumnRef.create('person.pid', 'person'),
                                   '=')]
-        self.assertEqual(query.whereClause, expectedWhere)
+        self.assertEqual(query.whereClauses, expectedWhere)
         self.assertEqual(query.selectColumns, [ColumnRef.create('*', None)])
         self.assertIsNone(query.joinClause)
+        self.assertIsNone(query.groupClauses)
 
     def testWhereClauseLike(self):
         query = Query('''select * from bill where bill.status like "%et%";''')
         expectedWhere = [BinaryOp(ColumnRef.create('bill.status', 'bill'),
                                   ColumnRef.create('%et%', None),
                                   '~~')]
-        self.assertEqual(query.whereClause, expectedWhere)
+        self.assertEqual(query.whereClauses, expectedWhere)
         expectedSelect = [ColumnRef.create('*', None)]
         self.assertEqual(query.selectColumns, expectedSelect)
         self.assertIsNone(query.joinClause)
         self.assertEqual(query.tables, {'bill'})
+        self.assertIsNone(query.groupClauses)
+
+    def testSimpleGroupBy(self):
+        query = Query('''select person.first, person.last, count(*)
+                        from person join term on person.pid = term.pid
+                        group by person.pid, person.last;''')
+        self.assertEqual(query.tables, {'person', 'term'})
+        self.assertEqual(query.joinClause, JoinClause(
+            [JoinOp('person', 'person.pid', 'term', 'term.pid', '=')]))
+        expectedSelect = [ColumnRef.create('person.first', 'person'),
+                          ColumnRef.create('person.last', 'person'),
+                          FuncCall.create('count', [ColumnRef.create('*', None)])]
+        self.assertEqual(query.selectColumns, expectedSelect)
+        self.assertIsNone(query.whereClauses)
+        self.assertEqual(query.groupClauses,
+                         [ColumnRef.create('person.pid', 'person'),
+                          ColumnRef.create('person.last', 'person')])
+
+    def testGroupByFunc(self):
+        query = Query('''select person.pid, count(*) from person
+                        join term on person.pid = term.pid
+                        group by count(*), person.pid''')
+        self.assertEqual(query.tables, {'person', 'term'})
+        self.assertEqual(query.selectColumns,
+                         [ColumnRef.create('person.pid', 'person'),
+                          FuncCall.create('count', [ColumnRef.create('*', None)])])
+        self.assertEqual(query.joinClause,
+                         JoinClause([JoinOp('person', 'person.pid', 'term', 'term.pid', '=')]))
+        self.assertIsNone(query.whereClauses)
+        self.assertEqual(query.groupClauses,
+                         [FuncCall.create('count', [ColumnRef.create('*', None)]),
+                          ColumnRef.create('person.pid', 'person')])
 
 
 if __name__ == '__main__':
