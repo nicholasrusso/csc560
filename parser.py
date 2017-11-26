@@ -123,14 +123,6 @@ class ColumnRef:
         return equal
 
 
-class Expression:
-    def __init__(self, exprTree):
-        if COLUMN_REF in exprTree:
-            column = exprTree[COLUMN_REF]
-            # fields =
-            # print('Expression:', exprTree)
-
-
 class BinaryOp:
     def __init__(self, leftExpr, rightExpr, operator):
         self.leftColumn = leftExpr
@@ -143,15 +135,25 @@ class BinaryOp:
                and self.rightColumn == other.rightColumn
 
     def __str__(self):
-        return '<BinaryOp: {} {} {}>'.format(str(self.leftColumn)
-                                             if self.leftColumn is not None
-                                             else 'NIL',
-                                             str(self.operator)
-                                             if self.operator is not None
-                                             else 'NIL',
-                                             str(self.rightColumn)
-                                             if self.rightColumn is not None
-                                             else 'NIL')
+        if self.operator == LIKE:
+            operator = 'like'
+        else:
+            operator = self.operator
+        if self.rightColumn is not None and type(self.rightColumn) is ColumnRef \
+                and self.rightColumn.field != AGG_STAR and self.rightColumn.table is None:
+            rightColumn = "'{}'".format(self.rightColumn)
+        else:
+            rightColumn = self.rightColumn
+
+        return '{} {} {}'.format(str(self.leftColumn)
+                                 if self.leftColumn is not None
+                                 else 'NIL',
+                                 str(operator)
+                                 if operator is not None
+                                 else 'NIL',
+                                 str(rightColumn)
+                                 if rightColumn is not None
+                                 else 'NIL')
 
 
 class JoinOp(BinaryOp):
@@ -189,7 +191,30 @@ class JoinClause:
         return type(other) is JoinClause and self.joins == other.joins
 
     def __str__(self):
-        return '\n'.join(str(joinOp) for joinOp in self.joins)
+        return ' '.join(str(joinOp) for joinOp in self.joins)
+
+
+class WhereClause:
+    def __init__(self, whereStatements):
+        self.whereStatements = whereStatements
+
+    def __eq__(self, other):
+        return type(other) is WhereClause and self.whereStatements == other.whereStatements
+
+    # NOTE: Only works with boolean 'and' expressions
+    def __str__(self):
+        return 'where {}'.format(' and '.join(str(whereStmt) for whereStmt in self.whereStatements))
+
+
+class GroupClause:
+    def __init__(self, groupStatements):
+        self.groupStatements = groupStatements
+
+    def __eq__(self, other):
+        return type(other) is GroupClause and self.groupStatements == other.groupStatements
+
+    def __str__(self):
+        return 'group by {}'.format(', '.join([str(stmt) for stmt in self.groupStatements]))
 
 
 class Query(object):
@@ -210,17 +235,17 @@ class Query(object):
         self.joinClause = None
         self.tables = set()
         self.selectColumns = []
-        self.whereClauses = None
-        self.groupClauses = None
+        self.whereClause = None
+        self.groupClause = None
 
         if SELECT_STMT in parseTree:
             select = parseTree[SELECT_STMT]
             self.parseSelectClause(select)
             if WHERE_CLAUSE in select:
-                self.whereClauses = self.parseWhereClause(select[WHERE_CLAUSE])
+                self.whereClause = self.parseWhereClause(select[WHERE_CLAUSE])
             if GROUP_CLAUSE in select:
-                self.groupClauses = [self.parseNode(groupBy)
-                                     for groupBy in select[GROUP_CLAUSE]]
+                self.groupClause = GroupClause([self.parseNode(groupBy)
+                                                for groupBy in select[GROUP_CLAUSE]])
         else:
             raise KeyError('Expected select query')
 
@@ -229,6 +254,20 @@ class Query(object):
     def __eq__(self, other):
         return type(other) is Query and self.joinClause == other.joinClause \
                and self.tables == other.tables and self.selectColumns == other.selectColumns
+
+    def __str__(self):
+        queryStr = 'select {} from '.format(', '.join([str(col) for col in self.selectColumns]))
+
+        if self.joinClause is not None:
+            queryStr += str(self.joinClause)
+        else:
+            queryStr += ', '.join(self.tables)
+        if self.whereClause is not None:
+            queryStr += ' ' + str(self.whereClause)
+        if self.groupClause is not None:
+            queryStr += ' ' + str(self.groupClause)
+
+        return queryStr + ';'
 
     def parseNode(self, node):
         if LEFT_EXPR in node and RIGHT_EXPR in node:
@@ -279,13 +318,12 @@ class Query(object):
         self.selectColumns = [col for col in selectedCols]
 
     def parseWhereClause(self, whereClauseTree):
-        # print('Parsing where clause:', whereClauseTree)
         whereClause = self.parseNode(whereClauseTree)
 
         if type(whereClause) is not list:
             whereClause = [whereClause]
 
-        return whereClause
+        return WhereClause(whereClause)
 
     def _parseResTarget(self, resTarget):
         targetValue = None
