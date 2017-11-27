@@ -155,6 +155,46 @@ class ParserTests(unittest.TestCase):
                          + 'join term on person.pid = term.pid '
                          + 'group by count(*), person.pid;')
 
+    def testIsNull(self):
+        query = Query('select * from legislator where legislator.twitter_handle is null;')
+        self.assertEqual(query.tables, {'legislator'})
+        self.assertEqual(query.selectColumns,
+                         [ColumnRef.create('*', None)])
+        self.assertEqual(query.whereClause,
+                         WhereClause([NullTest(ColumnRef.create('legislator.twitter_handle',
+                                                                'legislator'),
+                                               True)]))
+        self.assertIsNone(query.joinClause)
+        self.assertIsNone(query.groupClause)
+
+    def testIsNotNull(self):
+        query = Query('select * from legislator where legislator.twitter_handle is not null;')
+        self.assertEqual(query.tables, {'legislator'})
+        self.assertEqual(query.selectColumns,
+                         [ColumnRef.create('*', None)])
+        self.assertEqual(query.whereClause,
+                         WhereClause([NullTest(ColumnRef.create('legislator.twitter_handle',
+                                                                'legislator'),
+                                               False)]))
+        self.assertIsNone(query.joinClause)
+        self.assertIsNone(query.groupClause)
+
+    def testConst(self):
+        query = Query('''select * from person join term on person.pid = term.pid
+                        where person.first like \'A%\' and term.current_term = 1;''')
+        self.assertEqual(query.tables, {'person', 'term'})
+        self.assertEqual(query.selectColumns,
+                         [ColumnRef.create('*', None)])
+        self.assertEqual(query.joinClause,
+                         JoinClause([JoinOp('person', 'person.pid', 'term', 'term.pid', '=')]))
+        expectedWhere = WhereClause([BinaryOp(ColumnRef.create('person.first', 'person'),
+                                              Constant('A%', STRING_TYPE),
+                                              LIKE),
+                                     BinaryOp(ColumnRef.create('term.current_term', 'term'),
+                                              Constant(1, INTEGER_TYPE),
+                                              '=')])
+        self.assertEqual(query.whereClause, expectedWhere)
+        self.assertIsNone(query.groupClause)
 
 if __name__ == '__main__':
     unittest.main()

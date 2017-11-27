@@ -16,9 +16,18 @@ FIELDS = 'fields'
 JOIN_EXPR = 'JoinExpr'
 FUNC_CALL = 'FuncCall'
 FUNC_NAME = 'funcname'
+SINGLE_ARG = 'arg'
 FUNC_ARGS = 'args'
 AGG_STAR = 'agg_star'
 A_STAR = 'A_Star'
+
+A_CONST = 'A_Const'
+INTEGER_TYPE = 'Integer'
+INTEGER_VAL = 'ival'
+NULL_TEST = 'NullTest'
+NULL_TEST_TYPE = 'nulltesttype'
+NULL_TEST_NOT_NULL = 1
+NULL_TEST_IS_NULL = 0
 
 RANGE_VAR = 'RangeVar'
 LEFT_ARG = 'larg'
@@ -76,6 +85,23 @@ class FuncCall:
         return equal
 
 
+class Constant:
+    def __init__(self, value, typ):
+        if typ == STRING_TYPE:
+            self.value = '\'{}\''.format(str(value))
+        else:
+            self.value = value
+        self.type = typ
+
+    def __str__(self):
+        # return '<Constant: val={}, type={}>'.format(str(self.value), self.type)
+        return str(self.value)
+
+    def __eq__(self, other):
+        return type(other) is Constant and self.value == other.value \
+               and self.type == other.type
+
+
 class ColumnRef:
     def __init__(self, columnRefTree=None):
         if columnRefTree is not None:
@@ -121,6 +147,21 @@ class ColumnRef:
             equal = self.field == other.field and self.table == other.table
 
         return equal
+
+
+class NullTest:
+    def __init__(self, arg, isNull):
+        self.arg = arg
+        self.isNull = isNull
+
+    def __eq__(self, other):
+        return type(other) is NullTest and \
+               self.arg == other.arg and self.isNull == other.isNull
+
+    def __str__(self):
+        return '{} is {}'.format(str(self.arg),
+                                 'null' if self.isNull
+                                 else 'not null')
 
 
 class BinaryOp:
@@ -195,6 +236,9 @@ class JoinClause:
 
 
 class WhereClause:
+    '''
+    :param whereStatements list of BinaryOp and\or NullTest
+    '''
     def __init__(self, whereStatements):
         self.whereStatements = whereStatements
 
@@ -295,6 +339,10 @@ class Query(object):
         elif FUNC_ARGS in node:
             # print('Found Args')
             return [self.parseNode(arg) for arg in node[FUNC_ARGS]]
+        elif A_CONST in node:
+            return self.parseAConst(node[A_CONST])
+        elif NULL_TEST in node:
+            return self.parseNullTest(node[NULL_TEST])
         elif COLUMN_REF in node:
             # print('Found ColumnRef:', node[COLUMN_REF])
             return ColumnRef(node[COLUMN_REF])
@@ -482,3 +530,40 @@ class Query(object):
         if rightJoins is not None:
             joinOps.extend(rightJoins)
         return joinOps
+
+    def parseAConst(self, constExpr):
+        constValue = None
+
+        if VALUE in constExpr:
+            val = constExpr[VALUE]
+
+            if STRING_TYPE in val:
+                stringType = val[STRING_TYPE]
+                if STR_TYPE in stringType:
+                    constValue = Constant(stringType[STR_TYPE], STRING_TYPE)
+                else:
+                    raise ValueError('Couldn\'t parse string value from string type in:',
+                                     stringType)
+            elif INTEGER_TYPE in val:
+                integerType = val[INTEGER_TYPE]
+                if INTEGER_VAL in integerType:
+                    constValue = Constant(int(integerType[INTEGER_VAL]), INTEGER_TYPE)
+                else:
+                    raise ValueError('Couldn\'t parse integer value from integer type in:',
+                                     integerType)
+
+        return constValue
+
+    def parseNullTest(self, nullTestExpr):
+        nullTest = None
+
+        if SINGLE_ARG in nullTestExpr:
+            arg = self.parseNode(nullTestExpr[SINGLE_ARG])
+        else:
+            raise ValueError('Couldn\t find argument in NullTest:', nullTestExpr)
+
+        if NULL_TEST_TYPE in nullTestExpr:
+            nullTestType = int(nullTestExpr[NULL_TEST_TYPE])
+            nullTest = NullTest(arg, nullTestType == NULL_TEST_IS_NULL)
+
+        return nullTest
