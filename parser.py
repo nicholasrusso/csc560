@@ -46,6 +46,10 @@ LIKE = '~~'
 
 # NOTE: queryToJsonTree seems to lowercase all references (columns, tables, etc)
 
+'''
+args: list of ColumnRef objects
+funcName: string representation of function's name
+'''
 class FuncCall:
     def __init__(self, funcCallTree=None):
         self.args = []
@@ -86,6 +90,10 @@ class FuncCall:
 
 
 class Constant:
+    '''
+    :param value the value of the constant
+    :param typ data type of value
+    '''
     def __init__(self, value, typ):
         if typ == STRING_TYPE:
             self.value = '\'{}\''.format(str(value))
@@ -102,6 +110,10 @@ class Constant:
                and self.type == other.type
 
 
+'''
+field: specific column referenced, or '*' for all columns
+table: table referenced by this ColumnRef (will be None if field is '*')
+'''
 class ColumnRef:
     def __init__(self, columnRefTree=None):
         if columnRefTree is not None:
@@ -150,6 +162,11 @@ class ColumnRef:
 
 
 class NullTest:
+    '''
+    :param arg ColumnRef object being tested for null
+    :param isNull True if we are testing for "arg is null",
+        and False if we are testing for "arg is not null"
+    '''
     def __init__(self, arg, isNull):
         self.arg = arg
         self.isNull = isNull
@@ -165,6 +182,11 @@ class NullTest:
 
 
 class BinaryOp:
+    '''
+    :param leftExpr ColumnRef object representing left side of the expression
+    :param rightExpr ColumnRef or Constant representing right side of the expression
+    :param operator string representing the operator for this binary operation
+    '''
     def __init__(self, leftExpr, rightExpr, operator):
         self.leftColumn = leftExpr
         self.rightColumn = rightExpr
@@ -198,6 +220,13 @@ class BinaryOp:
 
 
 class JoinOp(BinaryOp):
+    '''
+    :param leftTable string representing left table's name
+    :param leftExpr ColumnRef representing left side of the join expression
+    :param rightTable string representing right table's name
+    :param rightExpr ColumnRef or Constant representing the right side of the join expression
+    :param operator Operator to test for a join between the left and right tables
+    '''
     def __init__(self, leftTable, leftExpr, rightTable, rightExpr, operator):
         BinaryOp.__init__(self, leftExpr, rightExpr, operator)
         self.leftTable = leftTable
@@ -225,6 +254,9 @@ class JoinOp(BinaryOp):
 
 
 class JoinClause:
+    '''
+    :param joinOps list of BinaryOp and/or NullTest objects
+    '''
     def __init__(self, joinOps):
         self.joins = joinOps
 
@@ -237,7 +269,7 @@ class JoinClause:
 
 class WhereClause:
     '''
-    :param whereStatements list of BinaryOp and\or NullTest
+    :param whereStatements list of BinaryOp and\or NullTest objects
     '''
     def __init__(self, whereStatements):
         self.whereStatements = whereStatements
@@ -251,6 +283,9 @@ class WhereClause:
 
 
 class GroupClause:
+    '''
+    :param groupStatements list of ColumnRef objects
+    '''
     def __init__(self, groupStatements):
         self.groupStatements = groupStatements
 
@@ -261,6 +296,14 @@ class GroupClause:
         return 'group by {}'.format(', '.join([str(stmt) for stmt in self.groupStatements]))
 
 
+'''
+parseTree: JSON parse tree of the query
+tables: set of strings representing the table names referenced in the query
+selectColumns: list of FuncCall and/or ColumnRef
+joinClause: JoinClause object
+whereClause: WhereClause object
+groupClause: GroupClause object
+'''
 class Query(object):
     def __init__(self, query):
         if type(query) is str:
