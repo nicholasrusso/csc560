@@ -54,7 +54,7 @@ class ParserTests(unittest.TestCase):
         self.assertIsNone(query.whereClause)
 
     def testTripleJoin(self):
-        query = Query('''select person.id, avg(person.age) from person
+        query = Query('''select person.id, avg(person.age) as avg_age from person
             join employee on person.id = employee.id
             join manager on manager.emplid = employee.id
             join exec on exec.id = manager.execid''')
@@ -63,7 +63,9 @@ class ParserTests(unittest.TestCase):
                                     JoinOp('exec', 'exec.id', 'manager', 'manager.execid', '=')])
         self.assertEqual(query.joinClause, expectedJoins)
         firstSelectCol = ColumnRef.create('person.id', 'person')
-        secondSelectCol = FuncCall.create('avg', [ColumnRef.create('person.age', 'person')])
+        secondSelectCol = QueryAlias('avg_age',
+                                     FuncCall.create('avg',
+                                                     [ColumnRef.create('person.age', 'person')]))
         expectedSelectCols = [firstSelectCol, secondSelectCol]
         self.assertEqual(query.selectColumns, expectedSelectCols)
         expectedTables = {'person', 'employee', 'manager', 'exec'}
@@ -195,6 +197,140 @@ class ParserTests(unittest.TestCase):
                                               '=')])
         self.assertEqual(query.whereClause, expectedWhere)
         self.assertIsNone(query.groupClause)
+
+    def testQueryAliases(self):
+        query = Query('''select lineitem.l_returnflag, lineitem.l_linestatus,
+                        sum(lineitem.l_quantity) as sum_qty,
+                        sum(lineitem.l_extendedprice) as sum_base_price,
+                        avg(lineitem.l_quantity) as avg_qty,
+                        avg(lineitem.l_extendedprice) as avg_price,
+                        avg(lineitem.l_discount) as avg_disc,
+                        count(*) as count_order from lineitem
+                        where lineitem.l_shipdate <= '1998-12-01'
+                        group by lineitem.l_returnflag, lineitem.l_linestatus
+                        order by lineitem.l_returnflag, lineitem.l_linestatus;''')
+        self.assertEqual(query.tables, {'lineitem'})
+        self.assertEqual(query.selectColumns,
+                         [ColumnRef.create('lineitem.l_returnflag', 'lineitem'),
+                          ColumnRef.create('lineitem.l_linestatus', 'lineitem'),
+                          QueryAlias('sum_qty',
+                                     FuncCall.create('sum',
+                                                     [ColumnRef.create('lineitem.l_quantity',
+                                                                       'lineitem')])),
+                          QueryAlias('sum_base_price',
+                                     FuncCall.create('sum',
+                                                     [ColumnRef.create('lineitem.l_extendedprice',
+                                                                       'lineitem')])),
+                          QueryAlias('avg_qty',
+                                     FuncCall.create('avg',
+                                                     [ColumnRef.create('lineitem.l_quantity',
+                                                                       'lineitem')])),
+                          QueryAlias('avg_price',
+                                     FuncCall.create('avg',
+                                                     [ColumnRef.create('lineitem.l_extendedprice',
+                                                                       'lineitem')])),
+                          QueryAlias('avg_disc',
+                                     FuncCall.create('avg',
+                                                     [ColumnRef.create('lineitem.l_discount',
+                                                                       'lineitem')])),
+                          QueryAlias('count_order',
+                                     FuncCall.create('count',
+                                                     [ColumnRef.create('*', None)]))])
+        self.assertEqual(query.whereClause,
+                         WhereClause(
+                             [BinaryOp(ColumnRef.create('lineitem.l_shipdate', 'lineitem'),
+                                       Constant('1998-12-01', STRING_TYPE),
+                                       '<=')]))
+        self.assertEqual(query.groupClause,
+                         GroupClause(
+                             [ColumnRef.create('lineitem.l_returnflag', 'lineitem'),
+                              ColumnRef.create('lineitem.l_linestatus', 'lineitem')]))
+        self.assertIsNone(query.joinClause)
+
+    def testBinopsInFuncs(self):
+        self.maxDiff = None
+        query = Query(
+            '''select lineitem.l_returnflag, lineitem.l_linestatus,
+                sum(lineitem.l_quantity) as sum_qty,
+                sum(lineitem.l_extendedprice) as sum_base_price,
+                sum(lineitem.l_extendedprice * (1 - lineitem.l_discount)) as sum_disc_price,
+                sum(lineitem.l_extendedprice *
+                    (1 - lineitem.l_discount) * (1 + lineitem.l_tax)) as sum_charge,
+                 avg(lineitem.l_quantity) as avg_qty, avg(lineitem.l_extendedprice) as avg_price,
+                 avg(lineitem.l_discount) as avg_disc, count(*) as count_order
+                 from lineitem
+                 where lineitem.l_shipdate <= '1998-12-01'
+                 group by lineitem.l_returnflag, lineitem.l_linestatus
+                 order by lineitem.l_returnflag, lineitem.l_linestatus;''')
+        self.assertEqual(query.tables, {'lineitem'})
+        expectedSelectCols = [ColumnRef.create('lineitem.l_returnflag', 'lineitem'),
+                              ColumnRef.create('lineitem.l_linestatus', 'lineitem'),
+                              QueryAlias('sum_qty',
+                                         FuncCall.create('sum',
+                                                         [ColumnRef.create('lineitem.l_quantity',
+                                                                           'lineitem')])),
+                              QueryAlias('sum_base_price',
+                                         FuncCall.create('sum',
+                                                         [ColumnRef.create('lineitem.l_extendedprice',
+                                                                           'lineitem')])),
+                              QueryAlias('sum_disc_price',
+                                         FuncCall.create('sum',
+                                                         [BinaryOp(ColumnRef.create(
+                                                             'lineitem.l_extendedprice',
+                                                             'lineitem'),
+                                                             BinaryOp(Constant(1, INTEGER_TYPE),
+                                                                      ColumnRef.create(
+                                                                          'lineitem.l_discount',
+                                                                          'lineitem'),
+                                                                      '-'),
+                                                             '*')])),
+                              QueryAlias('sum_charge',
+                                         FuncCall.create('sum',
+                                                         [BinaryOp(BinaryOp(
+                                                             ColumnRef.create('lineitem.l_extendedprice',
+                                                                              'lineitem'),
+                                                             BinaryOp(Constant(1, INTEGER_TYPE),
+                                                                      ColumnRef.create(
+                                                                          'lineitem.l_discount',
+                                                                          'lineitem'),
+                                                                      '-'),
+                                                             '*'
+                                                         ), BinaryOp(Constant(1, INTEGER_TYPE),
+                                                                     ColumnRef.create(
+                                                                         'lineitem.l_tax',
+                                                                         'lineitem'),
+                                                                     '+'),
+                                                             '*')])),
+                              QueryAlias('avg_qty',
+                                         FuncCall.create('avg',
+                                                         [ColumnRef.create(
+                                                             'lineitem.l_quantity',
+                                                             'lineitem')])),
+                              QueryAlias('avg_price',
+                                         FuncCall.create('avg',
+                                                         [ColumnRef.create(
+                                                             'lineitem.l_extendedprice',
+                                                             'lineitem')])),
+                              QueryAlias('avg_disc',
+                                         FuncCall.create('avg',
+                                                         [ColumnRef.create(
+                                                             'lineitem.l_discount',
+                                                             'lineitem')])),
+                              QueryAlias('count_order',
+                                         FuncCall.create('count',
+                                                         [ColumnRef.create('*', None)]))]
+        self.assertEqual(query.selectColumns, expectedSelectCols)
+        self.assertEqual(query.whereClause,
+                         WhereClause(
+                             [BinaryOp(ColumnRef.create('lineitem.l_shipdate', 'lineitem'),
+                                       Constant('1998-12-01', STRING_TYPE),
+                                       '<=')]))
+        self.assertEqual(query.groupClause,
+                         GroupClause(
+                             [ColumnRef.create('lineitem.l_returnflag', 'lineitem'),
+                              ColumnRef.create('lineitem.l_linestatus', 'lineitem')]))
+        self.assertIsNone(query.joinClause)
+
 
 if __name__ == '__main__':
     unittest.main()
