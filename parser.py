@@ -46,11 +46,12 @@ LIKE = '~~'
 
 # NOTE: queryToJsonTree seems to lowercase all references (columns, tables, etc)
 
-'''
-args: list of ColumnRef objects
-funcName: string representation of function's name
-'''
 class FuncCall:
+    """
+    args: list of ColumnRef objects
+    funcName: string representation of function's name
+    """
+
     def __init__(self, funcCallTree=None):
         self.args = []
         self.funcName = None
@@ -90,11 +91,12 @@ class FuncCall:
 
 
 class Constant:
-    '''
-    :param value the value of the constant
-    :param typ data type of value
-    '''
     def __init__(self, value, typ):
+        """
+        :param value the value of the constant
+        :param typ data type of value
+        """
+
         if typ == STRING_TYPE:
             self.value = '\'{}\''.format(str(value))
         else:
@@ -110,11 +112,12 @@ class Constant:
                and self.type == other.type
 
 
-'''
-field: specific column referenced, or '*' for all columns
-table: table referenced by this ColumnRef (will be None if field is '*')
-'''
 class ColumnRef:
+    """
+    field: specific column referenced, or '*' for all columns
+    table: table referenced by this ColumnRef (will be None if field is '*')
+    """
+
     def __init__(self, columnRefTree=None):
         if columnRefTree is not None:
             fieldTree = columnRefTree[FIELDS]
@@ -162,12 +165,13 @@ class ColumnRef:
 
 
 class NullTest:
-    '''
-    :param arg ColumnRef object being tested for null
-    :param isNull True if we are testing for "arg is null",
-        and False if we are testing for "arg is not null"
-    '''
     def __init__(self, arg, isNull):
+        """
+        :param arg ColumnRef object being tested for null
+        :param isNull True if we are testing for "arg is null",
+            and False if we are testing for "arg is not null"
+        """
+
         self.arg = arg
         self.isNull = isNull
 
@@ -182,12 +186,13 @@ class NullTest:
 
 
 class BinaryOp:
-    '''
-    :param leftExpr ColumnRef object representing left side of the expression
-    :param rightExpr ColumnRef or Constant representing right side of the expression
-    :param operator string representing the operator for this binary operation
-    '''
     def __init__(self, leftExpr, rightExpr, operator):
+        """
+        :param leftExpr ColumnRef object representing left side of the expression
+        :param rightExpr ColumnRef or Constant representing right side of the expression
+        :param operator string representing the operator for this binary operation
+        """
+
         self.leftColumn = leftExpr
         self.rightColumn = rightExpr
         self.operator = operator
@@ -207,7 +212,6 @@ class BinaryOp:
             rightColumn = "'{}'".format(self.rightColumn)
         else:
             rightColumn = self.rightColumn
-
         return '{} {} {}'.format(str(self.leftColumn)
                                  if self.leftColumn is not None
                                  else 'NIL',
@@ -220,14 +224,15 @@ class BinaryOp:
 
 
 class JoinOp(BinaryOp):
-    '''
-    :param leftTable string representing left table's name
-    :param leftExpr ColumnRef representing left side of the join expression
-    :param rightTable string representing right table's name
-    :param rightExpr ColumnRef or Constant representing the right side of the join expression
-    :param operator Operator to test for a join between the left and right tables
-    '''
     def __init__(self, leftTable, leftExpr, rightTable, rightExpr, operator):
+        """
+        :param leftTable string representing left table's name
+        :param leftExpr ColumnRef representing left side of the join expression
+        :param rightTable string representing right table's name
+        :param rightExpr ColumnRef or Constant representing the right side of the join expression
+        :param operator Operator to test for a join between the left and right tables
+        """
+
         BinaryOp.__init__(self, leftExpr, rightExpr, operator)
         self.leftTable = leftTable
         self.rightTable = rightTable
@@ -253,11 +258,33 @@ class JoinOp(BinaryOp):
         return join
 
 
+class QueryAlias:
+    """
+    Represents a SQL query "as" alias, e.g. "select count(*) as personCount".
+    """
+
+    def __init__(self, name, value):
+        """
+        :param name Name of the alias
+        :param value Value assigned to the given name
+        """
+
+        self.name = name
+        self.value = value
+
+    def __eq__(self, other):
+        return type(other) is QueryAlias and self.value == other.value
+
+    def __str__(self):
+        return '{} as {}'.format(str(self.value), self.name)
+
+
 class JoinClause:
-    '''
-    :param joinOps list of BinaryOp and/or NullTest objects
-    '''
     def __init__(self, joinOps):
+        """
+        :param joinOps list of BinaryOp and/or NullTest objects
+        """
+
         self.joins = joinOps
 
     def __eq__(self, other):
@@ -268,10 +295,11 @@ class JoinClause:
 
 
 class WhereClause:
-    '''
-    :param whereStatements list of BinaryOp and\or NullTest objects
-    '''
     def __init__(self, whereStatements):
+        """
+        :param whereStatements list of BinaryOp and\or NullTest objects
+        """
+
         self.whereStatements = whereStatements
 
     def __eq__(self, other):
@@ -283,10 +311,11 @@ class WhereClause:
 
 
 class GroupClause:
-    '''
-    :param groupStatements list of ColumnRef objects
-    '''
     def __init__(self, groupStatements):
+        """
+        :param groupStatements list of ColumnRef objects
+        """
+
         self.groupStatements = groupStatements
 
     def __eq__(self, other):
@@ -296,18 +325,19 @@ class GroupClause:
         return 'group by {}'.format(', '.join([str(stmt) for stmt in self.groupStatements]))
 
 
-'''
-parseTree: JSON parse tree of the query
-tables: set of strings representing the table names referenced in the query
-selectColumns: list of FuncCall and/or ColumnRef
-joinClause: JoinClause object
-whereClause: WhereClause object
-groupClause: GroupClause object
-'''
 class Query(object):
+    """
+    parseTree: JSON parse tree of the query
+    tables: set of strings representing the table names referenced in the query
+    selectColumns: list of FuncCall and/or ColumnRef
+    joinClause: JoinClause object
+    whereClause: WhereClause object
+    groupClause: GroupClause object
+    """
+
     def __init__(self, query):
         if type(query) is str:
-            print(query, '\n')
+            # print(query, '\n')
             parseTree = json.loads(queryToJsonTree(query))
         else:
             parseTree = query
@@ -382,7 +412,11 @@ class Query(object):
         elif COLUMN_REF in node:
             return ColumnRef(node[COLUMN_REF])
         elif FUNC_CALL in node:
-            return FuncCall(node[FUNC_CALL])
+            return self.parseFuncCall(node[FUNC_CALL])
+        # elif TARGET_LIST in node:
+        #     return self._parseResTarget()
+        elif RES_TARGET in node:
+            return self._parseResTarget(node[RES_TARGET])
 
         raise ValueError('Failed to parseNode:' + str(node))
 
@@ -412,11 +446,10 @@ class Query(object):
         targetValue = None
         if VALUE in resTarget:
             val = resTarget[VALUE]
+            targetValue = self.parseNode(val)
 
-            if COLUMN_REF in val:
-                targetValue = ColumnRef(val[COLUMN_REF])
-            elif FUNC_CALL in val:
-                targetValue = FuncCall(val[FUNC_CALL])
+        if NAME in resTarget:
+            targetValue = QueryAlias(resTarget[NAME], targetValue)
         return targetValue
 
     def parseFromClause(self, parseTree):
@@ -582,3 +615,17 @@ class Query(object):
             nullTest = NullTest(arg, nullTestType == NULL_TEST_IS_NULL)
 
         return nullTest
+
+    def parseFuncCall(self, funcCallExpr):
+        funcName = None
+        args = []
+
+        if FUNC_NAME in funcCallExpr and len(funcCallExpr[FUNC_NAME]) > 0:
+            funcName = funcCallExpr[FUNC_NAME][0][STRING_TYPE][STR_TYPE]
+        if FUNC_ARGS in funcCallExpr and len(funcCallExpr[FUNC_ARGS]) > 0:
+            funcArgs = funcCallExpr[FUNC_ARGS]
+            args = [self.parseNode(arg) for arg in funcArgs]
+        if AGG_STAR in funcCallExpr and funcCallExpr[AGG_STAR]:
+            args.append(ColumnRef.create('*', None))
+
+        return FuncCall.create(funcName, args)
