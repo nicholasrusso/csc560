@@ -276,9 +276,9 @@ class Query(object):
             raise ValueError('Expected a select statement')
 
         self.parseTree = parseTree
-        self.joinClause = None
         self.tables = set()
         self.selectColumns = []
+        self.joinClause = None
         self.whereClause = None
         self.groupClause = None
 
@@ -315,36 +315,28 @@ class Query(object):
 
     def parseNode(self, node):
         if LEFT_EXPR in node and RIGHT_EXPR in node:
-            # print('Found left and right expressions')
             left = self.parseNode(node[LEFT_EXPR])
             right = self.parseNode(node[RIGHT_EXPR])
             return left, right
         if FROM_CLAUSE in node:
             return self.parseFromClause(node[FROM_CLAUSE])
         elif JOIN_EXPR in node:
-            # print('Found JOIN_EXPR')
             return self.parseSingleJoinExpr(node[JOIN_EXPR])
         elif QUALIFIERS in node:
-            # print('Found QUALIFIERS')
             return self.createJoinOp(node)
         elif RANGE_VAR in node:
-            # print('Found RANGE_VAR')
             return self.parseRangeVar(node)
         elif A_EXPR in node:
-            # print('Found A_EXPR')
             return self.parseAExpr(node[A_EXPR])
         elif BOOL_EXPR in node:
-            # print('Found BOOL_EXPR')
             return self.parseNode(node[BOOL_EXPR])
         elif FUNC_ARGS in node:
-            # print('Found Args')
             return [self.parseNode(arg) for arg in node[FUNC_ARGS]]
         elif A_CONST in node:
             return self.parseAConst(node[A_CONST])
         elif NULL_TEST in node:
             return self.parseNullTest(node[NULL_TEST])
         elif COLUMN_REF in node:
-            # print('Found ColumnRef:', node[COLUMN_REF])
             return ColumnRef(node[COLUMN_REF])
         elif FUNC_CALL in node:
             return FuncCall(node[FUNC_CALL])
@@ -408,24 +400,18 @@ class Query(object):
 
     def parseJoinExprs(self, joinExpr):
         left = joinExpr[LEFT_ARG]
-        # print('LEFT:', left)
         right = joinExpr[RIGHT_ARG]
-        # print('RIGHT:', right)
         joins = []
 
         if QUALIFIERS in joinExpr:
-            # print('Top level join:', str(joinExpr[QUALIFIERS]))
             joins.extend(self.createJoinOp(joinExpr))
-            # print('Top-level JoinOp:', topLevelJoin)
         else:
             if JOIN_EXPR in left:
                 leftJoins = self.parseSingleJoinExpr(left)
                 joins.extend(leftJoins)
-                # print('Left join:', [str(leftJoin) for leftJoin in leftJoins])
 
             if JOIN_EXPR in right:
                 joins.extend(self.parseSingleJoinExpr(right))
-                # print('Right join:', str(rightJoins))
             elif RANGE_VAR in right:
                 # TODO: Do we need this case?
                 rightTable = self.parseRangeVar(right)
@@ -488,39 +474,25 @@ class Query(object):
 
         operator = operator[STRING_TYPE][STR_TYPE]
         if LEFT_ARG in joinExprTree:
-            # print('JoinExprTree[LEFT_ARG]:', joinExprTree[LEFT_ARG])
             leftArg = joinExprTree[LEFT_ARG]
             if JOIN_EXPR in leftArg:
                 leftJoins = self.parseSingleJoinExpr(leftArg)
                 joinOps.extend(leftJoins)
-                # print('LEFT_JOIN:', [str(leftJoin) for leftJoin in leftJoins])
             else:
                 leftTable = joinExprTree[LEFT_ARG][RANGE_VAR][RELATION_NAME]
         if RIGHT_ARG in joinExprTree:
             rightArg = joinExprTree[RIGHT_ARG]
-            # print('JoinExprTree[RIGHT_ARG]:', rightArg)
 
             if JOIN_EXPR in rightArg:
                 rightJoins = self.parseSingleJoinExpr(rightArg)
-                # print('RIGHT_JOIN:', str(rightJoins))
             else:
                 rightTable = joinExprTree[RIGHT_ARG][RANGE_VAR][RELATION_NAME]
 
-        leftCol = None
-        if LEFT_EXPR in join:
-            leftExpr = join[LEFT_EXPR]
-            if COLUMN_REF in leftExpr:
-                leftCol = ColumnRef(leftExpr[COLUMN_REF])
-                if leftCol.table is not None:
-                    leftTable = leftCol.table
-
-        rightCol = None
-        if RIGHT_EXPR in join:
-            rightExpr = join[RIGHT_EXPR]
-            if COLUMN_REF in rightExpr:
-                rightCol = ColumnRef(rightExpr[COLUMN_REF])
-                if rightCol.table is not None:
-                    rightTable = rightCol.table
+        leftCol, rightCol = self.parseNode(join)
+        if leftCol.table is not None:
+            leftTable = leftCol.table
+        if rightCol.table is not None:
+            rightTable = rightCol.table
 
         if leftTable is not None and rightTable is not None \
                 and operator is not None and leftCol is not None \
