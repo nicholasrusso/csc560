@@ -38,10 +38,9 @@ def parse_query(query):
       tables_cols.append((parts[0],parts[1]))
   return tables_cols
 
-def run_queries(queries):
-  with database("testdb", "test", "test") as db:
-    for query in queries:
-      db.execute(query) # How are we doing timing?
-
+def save_queries(queries):
+  string_queries = []
+  for query in queries:
+    string_queries.append(query.toString())
 
 run_testing("testing_queries.txt",pickle.load(open("mvs.pickle","rb")))
