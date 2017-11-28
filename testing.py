@@ -1,4 +1,5 @@
 # Input to me is a list of MV objects. Each MV object should have name, string query, list of table/column pairs.
+import pickle
 
 def run_testing(file_name, mvs):
   test_queries = get_test_queries(file_name)
@@ -43,3 +44,4 @@ def run_queries(queries):
       db.execute(query) # How are we doing timing?
 
 
+run_testing("testing_queries.txt",pickle.load(open("mvs.pickle","rb")))
