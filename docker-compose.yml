@@ -1,0 +1,10 @@
+version: "2"
+services:
+  csc560:
+    build: .
+    volumes:
+      - .:/project
+  database:
+    build: ./database
+    ports:
+      - "5433:5432"
