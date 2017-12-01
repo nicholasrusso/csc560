@@ -6,8 +6,9 @@
   # Create index
   # Add MV to our stored database model
 
+import pickle
 from parseQueryFile import *
-#from pgWrapper import *
+from pgWrapper import *
 
 class MaterializedView:
     def __init__(self, view_name, select_str, tableSets):
@@ -29,7 +30,7 @@ def process_model(queryModel, tableCounts):
         for i in range(len(queryModel.joinClause.joins)):
             leftTable = joins[i].leftTable
             rightTable = joins[i].rightTable
-            leftCol = joins[i].leftColumn
+            leftCol = str(joins[i].leftColumn).split(".")[1]
             rightCol = joins[i].rightColumn
             joinOper = joins[i].operator
 
@@ -44,7 +45,7 @@ def process_model(queryModel, tableCounts):
 
 
 #tableCounts is dict = {((leftTable, leftCol), (rightTable, rightCol), joinOper) -> count}
-def createViews(tableCounts, threshold):
+def createViews(tableCounts, threshold, db):
     MVs = []
 
     # tableSet = ((leftTable, leftCol), (rightTable, rightCol), joinOper)
@@ -53,17 +54,17 @@ def createViews(tableCounts, threshold):
             tables = list(tableSet[:-1] ) # slices off the joinOper
             joinOper = tableSet[-1]
 
-            MVs.append(create_mv(tables, joinOper))
+            MVs.append(create_mv(tables, joinOper, db))
 
             for table, col in tables:
-                create_index(table, col)
+                create_index(table, col, db)
 
     return MVs
 
 
 
 # tableSets = [(leftTable, leftCol), (rightTable, rightCol)]
-def create_mv(tableSets, joinOper):
+def create_mv(tableSets, joinOper, db):
     tables = []
     for table, col in tableSets:
         tables.append(table)
@@ -80,18 +81,18 @@ def create_mv(tableSets, joinOper):
 
     # ADD MV TO DATABASE MODEL???
 
-    #db.execute(data_query)
+    db.execute(data_query)
 
     return mv
 
 
 
 # should indexes be made on each table in the set of tables being joined?
-def create_index(table, column):
+def create_index(table, column, db):
     index_name = table + "_" + column + "_index"
     index_query = "CREATE INDEX " + index_name + "ON " + table + "(" + column + ")"
 
-    #db.execute(index_query)
+    db.execute(index_query)
 
 
 
@@ -106,8 +107,10 @@ if __name__ == '__main__':
         for i in range(len(queries)):
             process_model(queries[i], tableCounts)
 
-        MVs = createViews(tableCounts, 1)
+        #MVs = createViews(tableCounts, 1)
 
+        #pickle.dump(MVs, open("MVs.p", "wb"))
 
-        #with database("testdb", "test", "test") as db:
-         #       createViews(tableCounts, 1)
+        with pgWrapper("test", "postgres", "") as db:
+            MVs = createViews(tableCounts, 1, db)
+            pickle.dump(MVs, open("MVs.p", "wb"))
