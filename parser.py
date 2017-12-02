@@ -340,12 +340,42 @@ class JoinClause:
         return type(other) is JoinClause and self.joins == other.joins
 
     def __str__(self):
-        return ' '.join(str(joinOp) for joinOp in self.joins)
+        joinStr = ''
+        if self.joins is not None and len(self.joins) > 0:
+            joinedTables = set()
+            joinStr = str(self.joins[0])
+            joinedTables.add(self.joins[0].leftTable)
+            joinedTables.add(self.joins[0].rightTable)
+
+            for join in self.joins[1:]:
+                if join.leftTable in joinedTables:
+                    joinedTables.add(join.rightTable)
+                    joinStr += ' join {} on {} {} {}'.format(
+                        join.rightTable, join.leftColumn,
+                        join.operator, join.rightColumn)
+                elif join.rightTable in joinedTables:
+                    joinedTables.add(join.leftTable)
+                    joinStr += ' join {} on {} {} {}'.format(
+                        join.leftTable, join.leftColumn,
+                        join.operator, join.rightColumn)
+
+        return joinStr
 
     def replaceTable(self, targetTable, replacementTable):
         if self.joins is not None and len(self.joins) > 0:
             for join in self.joins:
                 join.replaceTable(targetTable, replacementTable)
+            self._removeDuplicateJoins()
+
+    def _removeDuplicateJoins(self):
+        newJoins = []
+        joinedTables = set()
+        for join in self.joins:
+            if join.leftTable != join.rightTable and join.leftTable not in joinedTables \
+                    and join.rightTable not in joinedTables:
+                newJoins.append(join)
+                joinedTables.add(join.leftTable)
+        self.joins = newJoins
 
 
 class WhereClause:
@@ -470,6 +500,10 @@ class Query(object):
                 col.replaceTable(targetTable, replacementTable)
         if self.joinClause is not None:
             self.joinClause.replaceTable(targetTable, replacementTable)
+
+            # All joins were duplicates
+            if len(self.joinClause.joins) == 0:
+                self.joinClause = None
         if self.whereClause is not None:
             self.whereClause.replaceTable(targetTable, replacementTable)
         if self.groupClause is not None:
