@@ -335,36 +335,33 @@ class ParserTests(unittest.TestCase):
         query = Query('''select person.pid, count(*) from person
                         join term on person.pid = term.pid
                         group by count(*), person.pid''')
-        query.replaceTable('person', 'person_view')
-        self.assertEqual(query.tables, {'person_view', 'term'})
+        query.replaceTable('person', 'matview')
+        self.assertEqual(query.tables, {'matview', 'term'})
         self.assertEqual(query.selectColumns,
-                         [ColumnRef.create('person_view.pid', 'person_view'),
+                         [ColumnRef.create('matview.pid', 'matview'),
                           FuncCall.create('count', [ColumnRef.create('*', None)])])
         self.assertEqual(query.joinClause,
-                         JoinClause([JoinOp('person_view', 'person_view.pid', 'term', 'term.pid', '=')]))
+                         JoinClause([JoinOp('matview', 'matview.pid', 'term', 'term.pid', '=')]))
         self.assertIsNone(query.whereClause)
         self.assertEqual(query.groupClause,
                          GroupClause([FuncCall.create('count', [ColumnRef.create('*', None)]),
-                                      ColumnRef.create('person_view.pid', 'person_view')]))
-        self.assertEqual(str(query), 'select person_view.pid, count(*) from person_view '
-                         + 'join term on person_view.pid = term.pid '
-                         + 'group by count(*), person_view.pid;')
+                                      ColumnRef.create('matview.pid', 'matview')]))
+        self.assertEqual(str(query), 'select matview.pid, count(*) from matview '
+                         + 'join term on matview.pid = term.pid '
+                         + 'group by count(*), matview.pid;')
 
-        query.replaceTable('term', 'term_matview')
-        self.assertEqual(query.tables, {'person_view', 'term_matview'})
+        query.replaceTable('term', 'matview')
+        self.assertEqual(query.tables, {'matview'})
         self.assertEqual(query.selectColumns,
-                         [ColumnRef.create('person_view.pid', 'person_view'),
+                         [ColumnRef.create('matview.pid', 'matview'),
                           FuncCall.create('count', [ColumnRef.create('*', None)])])
-        self.assertEqual(query.joinClause,
-                         JoinClause(
-                             [JoinOp('person_view', 'person_view.pid', 'term_matview', 'term_matview.pid', '=')]))
+        self.assertIsNone(query.joinClause)
         self.assertIsNone(query.whereClause)
         self.assertEqual(query.groupClause,
                          GroupClause([FuncCall.create('count', [ColumnRef.create('*', None)]),
-                                      ColumnRef.create('person_view.pid', 'person_view')]))
-        self.assertEqual(str(query), 'select person_view.pid, count(*) from person_view '
-                         + 'join term_matview on person_view.pid = term_matview.pid '
-                         + 'group by count(*), person_view.pid;')
+                                      ColumnRef.create('matview.pid', 'matview')]))
+        self.assertEqual(str(query), 'select matview.pid, count(*) from matview '
+                         + 'group by count(*), matview.pid;')
 
         query = Query(
             '''select lineitem.l_returnflag, lineitem.l_linestatus,
@@ -434,6 +431,7 @@ class ParserTests(unittest.TestCase):
                                                          [ColumnRef.create(
                                                              'li_matview.l_discount',
                                                              'li_matview')])),
+
                               QueryAlias('count_order',
                                          FuncCall.create('count',
                                                          [ColumnRef.create('*', None)]))]
@@ -448,6 +446,67 @@ class ParserTests(unittest.TestCase):
                              [ColumnRef.create('li_matview.l_returnflag', 'li_matview'),
                               ColumnRef.create('li_matview.l_linestatus', 'li_matview')]))
         self.assertIsNone(query.joinClause)
+
+        query = Query('''select * from person join employee on person.id = employee.pid
+                        join manager on employee.mid = manager.id
+                        join exec on manager.exid = exec.id''')
+        query.replaceTable('employee', 'some_matview')
+        self.assertEqual(query.tables, {'person', 'some_matview', 'manager', 'exec'})
+        self.assertEqual(query.joinClause,
+                         JoinClause(
+                             [JoinOp('person', 'person.id', 'some_matview', 'some_matview.pid', '='),
+                              JoinOp('some_matview', 'some_matview.mid', 'manager', 'manager.id', '='),
+                              JoinOp('manager', 'manager.exid', 'exec', 'exec.id', '=')]))
+        self.assertEqual(str(query),
+                         'select * from person join some_matview on person.id = some_matview.pid'
+                         ' join manager on some_matview.mid = manager.id'
+                         ' join exec on manager.exid = exec.id;')
+
+        query.replaceTable('exec', 'some_matview')
+        self.assertEqual(query.tables, {'person', 'some_matview', 'manager'})
+        self.assertEqual(query.joinClause,
+                         JoinClause(
+                             [JoinOp('person', 'person.id', 'some_matview', 'some_matview.pid', '='),
+                              JoinOp('some_matview', 'some_matview.mid', 'manager', 'manager.id', '=')]))
+        self.assertEqual(str(query),
+                         'select * from person join some_matview on person.id = some_matview.pid'
+                         ' join manager on some_matview.mid = manager.id;')
+
+        query.replaceTable('person', 'some_matview')
+        self.assertEqual(query.joinClause,
+                         JoinClause(
+                             [JoinOp('some_matview', 'some_matview.mid', 'manager', 'manager.id', '=')]))
+        self.assertEqual(str(query),
+                         'select * from some_matview join manager on some_matview.mid = manager.id;')
+        query.replaceTable('manager', 'some_matview')
+        self.assertIsNone(query.joinClause)
+        self.assertEqual(str(query), 'select * from some_matview;')
+
+    def testQueryToStr(self):
+        query = Query('''select person.pid, person.first, person.last, count(*)
+                        from billdiscussion join bill on billdiscussion.bid = bill.bid
+                        join utterance on utterance.did = billdiscussion.did
+                        join person on person.pid = utterance.pid
+                        where bill.status = "Died"
+                        group by person.pid;''')
+        self.assertEqual(str(query), 'select person.pid, person.first, person.last, count(*)'
+                                     ' from billdiscussion join bill on billdiscussion.bid = bill.bid'
+                                     ' join utterance on utterance.did = billdiscussion.did'
+                                     ' join person on person.pid = utterance.pid'
+                                     ' where bill.status = \'Died\''
+                                     ' group by person.pid;')
+        query = Query('''select person.id, avg(person.age) from person
+            join employee on person.id = employee.id
+            join manager on manager.emplid = employee.id''')
+        self.assertEqual(str(query), 'select person.id, avg(person.age) from person'
+                                     ' join employee on person.id = employee.id'
+                                     ' join manager on manager.emplid = employee.id;')
+
+    def testBatchQueryToStr(self):
+        with open('queries_singleLine.sql', 'r') as file:
+            lines = file.read().split('\n')
+            for line in lines:
+                self.assertEqual(line, str(Query(line)))
 
 
 if __name__ == '__main__':
