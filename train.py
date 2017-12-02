@@ -120,6 +120,6 @@ if __name__ == '__main__':
 
         #pickle.dump(MVs, open("MVs.p", "wb"))
 
-        with pgWrapper("test", "postgres", "") as db:
+        with pgWrapper("test", "postgres", "", "database") as db:
             MVs = createViews(tableCounts, 1, db)
             pickle.dump(MVs, open("MVs.p", "wb"))
