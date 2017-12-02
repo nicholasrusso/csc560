@@ -488,9 +488,9 @@ class Query(object):
         :param replacementTable: str
         """
 
-        if targetTable not in self.tables:
-            raise ValueError('Target table {} is not in this Query'.format(
-                targetTable))
+       # if targetTable not in self.tables:
+       #     raise ValueError('Target table {} is not in this Query'.format(
+        #        targetTable))
 
         if self.tables is not None and targetTable in self.tables:
             self.tables.remove(targetTable)
