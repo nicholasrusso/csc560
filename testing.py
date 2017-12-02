@@ -1,18 +1,12 @@
 # Input to me is a list of MV objects. Each MV object should have name, string query, list of table/column pairs.
 import pickle
 
-def run_testing(file_name, mvs):
-  test_queries = get_test_queries(file_name)
+def run_testing(test_queries, mvs):
   modified_queries(test_queries, mvs)
   run_queries(modified_queries)
 
-# Disclaimer: only some functions tested
-def get_test_queries(file_name):
-  with open(file_name) as f:
-    test_queries = f.read().splitlines()
-  return test_queries
-  
 def modify_queries(test_queries, mvs):
+#need to modify for test_queries being parser format
   modified_queries = []
   for query in test_queries:
     editable_query = query
@@ -43,4 +37,4 @@ def save_queries(queries):
   for query in queries:
     string_queries.append(query.toString())
 
-run_testing("testing_queries.txt",pickle.load(open("mvs.pickle","rb")))
+run_testing(pivkel.load(open("testing_queries.pickle","rb"),pickle.load(open("mvs.pickle","rb")))
