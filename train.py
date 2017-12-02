@@ -7,7 +7,7 @@
   # Add MV to our stored database model
 
 import pickle
-from parseQueryFile import *
+#from parseQueryFile import *
 from pgWrapper import *
 
 class MaterializedView:
@@ -31,7 +31,7 @@ def process_model(queryModel, tableCounts):
             leftTable = joins[i].leftTable
             rightTable = joins[i].rightTable
             leftCol = str(joins[i].leftColumn).split(".")[1]
-            rightCol = joins[i].rightColumn
+            rightCol = joins[i].rightColumn.split(".")[1]
             joinOper = joins[i].operator
 
             if ((leftTable, leftCol), (rightTable, rightCol), joinOper) not in tableCounts:
@@ -47,6 +47,7 @@ def process_model(queryModel, tableCounts):
 #tableCounts is dict = {((leftTable, leftCol), (rightTable, rightCol), joinOper) -> count}
 def createViews(tableCounts, threshold, db):
     MVs = []
+    indexes = {}
 
     # tableSet = ((leftTable, leftCol), (rightTable, rightCol), joinOper)
     for tableSet, count in tableCounts.items():
@@ -57,7 +58,9 @@ def createViews(tableCounts, threshold, db):
             MVs.append(create_mv(tables, joinOper, db))
 
             for table, col in tables:
-                create_index(table, col, db)
+                if (table, col) not in indexes:
+                    create_index(table, col, db)
+                    indexes[(table, col)] = 1
 
     return MVs
 
@@ -78,6 +81,7 @@ def create_mv(tableSets, joinOper, db):
     create_query = "CREATE MATERIALIZED VIEW " + view_name + " AS " + data_query
 
     mv = MaterializedView(view_name, select_str, tableSets)
+    print(str(mv))
 
     # ADD MV TO DATABASE MODEL???
 
@@ -90,17 +94,22 @@ def create_mv(tableSets, joinOper, db):
 # should indexes be made on each table in the set of tables being joined?
 def create_index(table, column, db):
     index_name = table + "_" + column + "_index"
-    index_query = "CREATE INDEX " + index_name + "ON " + table + "(" + column + ")"
+    index_query = "CREATE INDEX " + index_name + " ON " + table + "(" + column + ")"
 
     db.execute(index_query)
 
 
 
 if __name__ == '__main__':
-    if len(argv) >= 2:
-        queryFile = argv[1]
-        queries = parseFile(queryFile)
-        print('Successfully parsed {} queries'.format(len(queries)))
+    #if len(argv) >= 2:
+    #    queryFile = argv[1]
+    #    queries = parseFile(queryFile)
+    #    pickle.dump(queries, open("newParsedQueries.p", "wb"))
+    #    print('Successfully parsed {} queries'.format(len(queries)))
+
+        file = open("newParsedQueries.p", "rb")
+        queries = pickle.load(file)
+        file.close()
 
         tableCounts = {}
 
