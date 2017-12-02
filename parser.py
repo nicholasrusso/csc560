@@ -89,6 +89,12 @@ class FuncCall:
 
         return equal
 
+    def replaceTable(self, targetTable, replacementTable):
+        if self.args is not None and len(self.args) > 0:
+            for arg in self.args:
+                if arg is not None and type(arg) is not str:
+                    arg.replaceTable(targetTable, replacementTable)
+
 
 class Constant:
     def __init__(self, value, typ):
@@ -110,6 +116,9 @@ class Constant:
     def __eq__(self, other):
         return type(other) is Constant and self.value == other.value \
                and self.type == other.type
+
+    def replaceTable(self, targetTable, replacementTable):
+        pass
 
 
 class ColumnRef:
@@ -163,6 +172,15 @@ class ColumnRef:
 
         return equal
 
+    def replaceTable(self, targetTable, replacementTable):
+        if self.table == targetTable:
+            self.table = replacementTable
+            if self.field is not None and type(self.field) is str:
+                table, field = self.field.split('.')
+                self.field = '{}.{}'.format(replacementTable, field)
+            else:
+                raise ValueError('Found non-string or None ColumnRef.field')
+
 
 class NullTest:
     def __init__(self, arg, isNull):
@@ -183,6 +201,10 @@ class NullTest:
         return '{} is {}'.format(str(self.arg),
                                  'null' if self.isNull
                                  else 'not null')
+
+    def replaceTable(self, targetTable, replacementTable):
+        if self.arg is not None:
+            self.arg.replaceTable(targetTable, replacementTable)
 
 
 class BinaryOp:
@@ -222,6 +244,22 @@ class BinaryOp:
                                  if rightColumn is not None
                                  else 'NIL')
 
+    def replaceTable(self, targetTable, replacementTable):
+        if self.leftColumn is not None:
+            if type(self.leftColumn) is str:
+                table, field = self.leftColumn.split('.')
+                if table == targetTable:
+                    self.leftColumn = '{}.{}'.format(replacementTable, field)
+            else:
+                self.leftColumn.replaceTable(targetTable, replacementTable)
+        if self.rightColumn is not None:
+            if type(self.rightColumn) is str:
+                table, field = self.rightColumn.split('.')
+                if table == targetTable:
+                    self.rightColumn = '{}.{}'.format(replacementTable, field)
+            else:
+                self.rightColumn.replaceTable(targetTable, replacementTable)
+
 
 class JoinOp(BinaryOp):
     def __init__(self, leftTable, leftExpr, rightTable, rightExpr, operator):
@@ -257,6 +295,13 @@ class JoinOp(BinaryOp):
 
         return join
 
+    def replaceTable(self, targetTable, replacementTable):
+        BinaryOp.replaceTable(self, targetTable, replacementTable)
+        if self.leftTable == targetTable:
+            self.leftTable = replacementTable
+        if self.rightTable == targetTable:
+            self.rightTable = replacementTable
+
 
 class QueryAlias:
     """
@@ -278,6 +323,10 @@ class QueryAlias:
     def __str__(self):
         return '{} as {}'.format(str(self.value), self.name)
 
+    def replaceTable(self, targetTable, replacementTable):
+        if self.value is not None:
+            self.value.replaceTable(targetTable, replacementTable)
+
 
 class JoinClause:
     def __init__(self, joinOps):
@@ -292,6 +341,11 @@ class JoinClause:
 
     def __str__(self):
         return ' '.join(str(joinOp) for joinOp in self.joins)
+
+    def replaceTable(self, targetTable, replacementTable):
+        if self.joins is not None and len(self.joins) > 0:
+            for join in self.joins:
+                join.replaceTable(targetTable, replacementTable)
 
 
 class WhereClause:
@@ -309,6 +363,11 @@ class WhereClause:
     def __str__(self):
         return 'where {}'.format(' and '.join(str(whereStmt) for whereStmt in self.whereStatements))
 
+    def replaceTable(self, targetTable, replacementTable):
+        if self.whereStatements is not None and len(self.whereStatements) > 0:
+            for statement in self.whereStatements:
+                statement.replaceTable(targetTable, replacementTable)
+
 
 class GroupClause:
     def __init__(self, groupStatements):
@@ -324,6 +383,11 @@ class GroupClause:
     def __str__(self):
         return 'group by {}'.format(', '.join([str(stmt) for stmt in self.groupStatements]))
 
+    def replaceTable(self, targetTable, replacementTable):
+        if self.groupStatements is not None and len(self.groupStatements) > 0:
+            for group in self.groupStatements:
+                group.replaceTable(targetTable, replacementTable)
+
 
 class Query(object):
     """
@@ -334,18 +398,6 @@ class Query(object):
     whereClause: WhereClause object
     groupClause: GroupClause object
     """
-
-    def replaceTable(self, targetTable, replacementTable):
-        '''
-        Replace all references of targetTable with replacementTable in
-            tables and column references.
-        :param targetTable:
-        :param replacementTable:
-        :return:
-        '''
-        print('Stub: replacing targetTable={} with replacement={}'.format(
-            targetTable, replacementTable
-        ))
 
     def __init__(self, query):
         if type(query) is str:
@@ -397,6 +449,31 @@ class Query(object):
             queryStr += ' ' + str(self.groupClause)
 
         return queryStr + ';'
+
+    def replaceTable(self, targetTable, replacementTable):
+        """
+        Replace all references of targetTable with replacementTable in
+            tables and column references.
+        :param targetTable: str
+        :param replacementTable: str
+        """
+
+        if targetTable not in self.tables:
+            raise ValueError('Target table {} is not in this Query'.format(
+                targetTable))
+
+        if self.tables is not None and targetTable in self.tables:
+            self.tables.remove(targetTable)
+            self.tables.add(replacementTable)
+        if self.selectColumns is not None and len(self.selectColumns) > 0:
+            for col in self.selectColumns:
+                col.replaceTable(targetTable, replacementTable)
+        if self.joinClause is not None:
+            self.joinClause.replaceTable(targetTable, replacementTable)
+        if self.whereClause is not None:
+            self.whereClause.replaceTable(targetTable, replacementTable)
+        if self.groupClause is not None:
+            self.groupClause.replaceTable(targetTable, replacementTable)
 
     def parseNode(self, node):
         if LEFT_EXPR in node and RIGHT_EXPR in node:
