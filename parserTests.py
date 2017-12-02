@@ -331,6 +331,124 @@ class ParserTests(unittest.TestCase):
                               ColumnRef.create('lineitem.l_linestatus', 'lineitem')]))
         self.assertIsNone(query.joinClause)
 
+    def testReplaceTable(self):
+        query = Query('''select person.pid, count(*) from person
+                        join term on person.pid = term.pid
+                        group by count(*), person.pid''')
+        query.replaceTable('person', 'person_view')
+        self.assertEqual(query.tables, {'person_view', 'term'})
+        self.assertEqual(query.selectColumns,
+                         [ColumnRef.create('person_view.pid', 'person_view'),
+                          FuncCall.create('count', [ColumnRef.create('*', None)])])
+        self.assertEqual(query.joinClause,
+                         JoinClause([JoinOp('person_view', 'person_view.pid', 'term', 'term.pid', '=')]))
+        self.assertIsNone(query.whereClause)
+        self.assertEqual(query.groupClause,
+                         GroupClause([FuncCall.create('count', [ColumnRef.create('*', None)]),
+                                      ColumnRef.create('person_view.pid', 'person_view')]))
+        self.assertEqual(str(query), 'select person_view.pid, count(*) from person_view '
+                         + 'join term on person_view.pid = term.pid '
+                         + 'group by count(*), person_view.pid;')
+
+        query.replaceTable('term', 'term_matview')
+        self.assertEqual(query.tables, {'person_view', 'term_matview'})
+        self.assertEqual(query.selectColumns,
+                         [ColumnRef.create('person_view.pid', 'person_view'),
+                          FuncCall.create('count', [ColumnRef.create('*', None)])])
+        self.assertEqual(query.joinClause,
+                         JoinClause(
+                             [JoinOp('person_view', 'person_view.pid', 'term_matview', 'term_matview.pid', '=')]))
+        self.assertIsNone(query.whereClause)
+        self.assertEqual(query.groupClause,
+                         GroupClause([FuncCall.create('count', [ColumnRef.create('*', None)]),
+                                      ColumnRef.create('person_view.pid', 'person_view')]))
+        self.assertEqual(str(query), 'select person_view.pid, count(*) from person_view '
+                         + 'join term_matview on person_view.pid = term_matview.pid '
+                         + 'group by count(*), person_view.pid;')
+
+        query = Query(
+            '''select lineitem.l_returnflag, lineitem.l_linestatus,
+                sum(lineitem.l_quantity) as sum_qty,
+                sum(lineitem.l_extendedprice) as sum_base_price,
+                sum(lineitem.l_extendedprice * (1 - lineitem.l_discount)) as sum_disc_price,
+                sum(lineitem.l_extendedprice *
+                    (1 - lineitem.l_discount) * (1 + lineitem.l_tax)) as sum_charge,
+                 avg(lineitem.l_quantity) as avg_qty, avg(lineitem.l_extendedprice) as avg_price,
+                 avg(lineitem.l_discount) as avg_disc, count(*) as count_order
+                 from lineitem
+                 where lineitem.l_shipdate <= '1998-12-01'
+                 group by lineitem.l_returnflag, lineitem.l_linestatus
+                 order by lineitem.l_returnflag, lineitem.l_linestatus;''')
+        query.replaceTable('lineitem', 'li_matview')
+        self.assertEqual(query.tables, {'li_matview'})
+        expectedSelectCols = [ColumnRef.create('li_matview.l_returnflag', 'li_matview'),
+                              ColumnRef.create('li_matview.l_linestatus', 'li_matview'),
+                              QueryAlias('sum_qty',
+                                         FuncCall.create('sum',
+                                                         [ColumnRef.create('li_matview.l_quantity',
+                                                                           'li_matview')])),
+                              QueryAlias('sum_base_price',
+                                         FuncCall.create('sum',
+                                                         [ColumnRef.create('li_matview.l_extendedprice',
+                                                                           'li_matview')])),
+                              QueryAlias('sum_disc_price',
+                                         FuncCall.create('sum',
+                                                         [BinaryOp(ColumnRef.create(
+                                                             'li_matview.l_extendedprice',
+                                                             'li_matview'),
+                                                             BinaryOp(Constant(1, INTEGER_TYPE),
+                                                                      ColumnRef.create(
+                                                                          'li_matview.l_discount',
+                                                                          'li_matview'),
+                                                                      '-'),
+                                                             '*')])),
+                              QueryAlias('sum_charge',
+                                         FuncCall.create('sum',
+                                                         [BinaryOp(BinaryOp(
+                                                             ColumnRef.create('li_matview.l_extendedprice',
+                                                                              'li_matview'),
+                                                             BinaryOp(Constant(1, INTEGER_TYPE),
+                                                                      ColumnRef.create(
+                                                                          'li_matview.l_discount',
+                                                                          'li_matview'),
+                                                                      '-'),
+                                                             '*'
+                                                         ), BinaryOp(Constant(1, INTEGER_TYPE),
+                                                                     ColumnRef.create(
+                                                                         'li_matview.l_tax',
+                                                                         'li_matview'),
+                                                                     '+'),
+                                                             '*')])),
+                              QueryAlias('avg_qty',
+                                         FuncCall.create('avg',
+                                                         [ColumnRef.create(
+                                                             'li_matview.l_quantity',
+                                                             'li_matview')])),
+                              QueryAlias('avg_price',
+                                         FuncCall.create('avg',
+                                                         [ColumnRef.create(
+                                                             'li_matview.l_extendedprice',
+                                                             'li_matview')])),
+                              QueryAlias('avg_disc',
+                                         FuncCall.create('avg',
+                                                         [ColumnRef.create(
+                                                             'li_matview.l_discount',
+                                                             'li_matview')])),
+                              QueryAlias('count_order',
+                                         FuncCall.create('count',
+                                                         [ColumnRef.create('*', None)]))]
+        self.assertEqual(query.selectColumns, expectedSelectCols)
+        self.assertEqual(query.whereClause,
+                         WhereClause(
+                             [BinaryOp(ColumnRef.create('li_matview.l_shipdate', 'li_matview'),
+                                       Constant('1998-12-01', STRING_TYPE),
+                                       '<=')]))
+        self.assertEqual(query.groupClause,
+                         GroupClause(
+                             [ColumnRef.create('li_matview.l_returnflag', 'li_matview'),
+                              ColumnRef.create('li_matview.l_linestatus', 'li_matview')]))
+        self.assertIsNone(query.joinClause)
+
 
 if __name__ == '__main__':
     unittest.main()
