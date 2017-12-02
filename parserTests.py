@@ -502,6 +502,12 @@ class ParserTests(unittest.TestCase):
                                      ' join employee on person.id = employee.id'
                                      ' join manager on manager.emplid = employee.id;')
 
+    def testBatchQueryToStr(self):
+        with open('queries_singleLine.sql', 'r') as file:
+            lines = file.read().split('\n')
+            for line in lines:
+                self.assertEqual(line, str(Query(line)))
+
 
 if __name__ == '__main__':
     unittest.main()
