@@ -335,6 +335,18 @@ class Query(object):
     groupClause: GroupClause object
     """
 
+    def replaceTable(self, targetTable, replacementTable):
+        '''
+        Replace all references of targetTable with replacementTable in
+            tables and column references.
+        :param targetTable:
+        :param replacementTable:
+        :return:
+        '''
+        print('Stub: replacing targetTable={} with replacement={}'.format(
+            targetTable, replacementTable
+        ))
+
     def __init__(self, query):
         if type(query) is str:
             # print(query, '\n')
