@@ -85,7 +85,7 @@ def create_mv(tableSets, joinOper, db):
 
     # ADD MV TO DATABASE MODEL???
 
-    db.execute(data_query)
+    db.execute(create_query)
 
     return mv
 
