@@ -83,9 +83,10 @@ def create_mv(tableSets, joinOper, db):
     mv = MaterializedView(view_name, select_str, tableSets)
     print(str(mv))
 
-    # ADD MV TO DATABASE MODEL???
-
-    db.execute(create_query)
+    try:
+        db.execute("SELECT * FROM " + view_name)
+    except:
+        db.execute(create_query)
 
     return mv
 
@@ -94,7 +95,7 @@ def create_mv(tableSets, joinOper, db):
 # should indexes be made on each table in the set of tables being joined?
 def create_index(table, column, db):
     index_name = table + "_" + column + "_index"
-    index_query = "CREATE INDEX " + index_name + " ON " + table + "(" + column + ")"
+    index_query = "CREATE INDEX IF NOT EXISTS " + index_name + " ON " + table + "(" + column + ")"
 
     db.execute(index_query)
 
