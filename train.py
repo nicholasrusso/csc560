@@ -78,15 +78,12 @@ def create_mv(tableSets, joinOper, db):
     select_str = "SELECT * FROM " + ' JOIN '.join(tables) #
     data_query = select_str + " on " + '.'.join(list(tableSets[0])) + joinOper + '.'.join(list(tableSets[1]))
 
-    create_query = "CREATE MATERIALIZED VIEW " + view_name + " AS " + data_query
+    create_query = "CREATE MATERIALIZED VIEW IF NOT EXISTS " + view_name + " AS " + data_query
 
     mv = MaterializedView(view_name, select_str, tableSets)
     print(str(mv))
 
-    try:
-        db.execute("SELECT * FROM " + view_name)
-    except:
-        db.execute(create_query)
+    db.execute(create_query)
 
     return mv
 
@@ -121,6 +118,6 @@ if __name__ == '__main__':
 
         #pickle.dump(MVs, open("MVs.p", "wb"))
 
-        with pgWrapper("test", "postgres", "", "database") as db:
+        with pgWrapper("test", "postgres", "") as db:
             MVs = createViews(tableCounts, 1, db)
             pickle.dump(MVs, open("MVs.p", "wb"))
