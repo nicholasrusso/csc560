@@ -1,0 +1,6 @@
+\connect test
+select utterance_term.house, count(*) from utterance_term group by utterance_term.house limit 3000;
+select utterance_term.state, utterance_term.house, count(*) from utterance_term group by utterance_term.state, utterance_term.house limit 3000;
+select utterance_term.state, utterance_term.house, utterance_term.party, count(*) from utterance_term group by utterance_term.state, utterance_term.house, utterance_term.party limit 3000;
+select utterance_term.party, count(*) from utterance_term group by utterance_term.party limit 3000;
+select utterance_term.state, count(*) from utterance_term group by utterance_term.state limit 3000;

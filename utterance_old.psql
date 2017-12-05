@@ -1,0 +1,6 @@
+\connect test
+select term.house, count(*) from utterance join term on utterance.u_pid = term.t_pid group by term.house limit 3000;
+select term.state, term.house, count(*) from utterance join term on utterance.u_pid = term.t_pid group by term.state, term.house limit 3000;
+select term.state, term.house, term.party, count(*) from utterance join term on utterance.u_pid = term.t_pid group by term.state, term.house, term.party limit 3000;
+select term.party, count(*) from utterance join term on utterance.u_pid = term.t_pid group by term.party limit 3000;
+select term.state, count(*) from utterance join term on utterance.u_pid = term.t_pid group by term.state limit 3000;
