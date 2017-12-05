@@ -14,13 +14,7 @@ new_utterance = "utterance_new.psql"
 
 
 def runAll(filename):
-    # proc = subprocess.Popen(["cat", "/etc/services"], stdout=subprocess.PIPE, shell=True)
-    # (out, err) = proc.communicate()
-    # print "program output:", out
     start_time = time.time()
-    # os.system("psql -Upostgres -f " + filename )
-    #proc = subprocess.Popen(["psql -Upostgres -f " + filename], stdout=subprocess.PIPE, shell=True)
-    # (out, err) = proc.communicate()
     result = subprocess.check_output("psql -Upostgres -f " + filename, shell=True)
     end = time.time() - start_time
     return (end, result)
@@ -42,7 +36,6 @@ def runTest(epochs, new_queries, old_queries):
 
     print("\nRunning " + str(epochs) + " Tests\n")
     for i in tqdm(range(epochs)):
-        #print("Epoch: " + str(i + 1))
         if i % 2 == 0:
             mv = runAll(dir + new_queries)
             no_mv = runAll(dir + old_queries)
@@ -58,9 +51,6 @@ def runTest(epochs, new_queries, old_queries):
         no_mv_time += no_mv[0]
         writeToFile(mv_f, mv)
         writeToFile(no_mv_f, no_mv)
-        # print("\nEqual values: ", mv[1] == no_mv[1])
-        # print("Total runtime with MVs: ", mv_time)
-        # print("Total runtime without MVs:    ", no_mv_time)
     
     mv_f.close()
     no_mv_f.close()
@@ -73,25 +63,11 @@ def runTest(epochs, new_queries, old_queries):
     print("Average runtime without MVs: ", no_mv_time/epochs)
     print("Total runtime difference: ", (no_mv_time - mv_time)/epochs)
 
-    #plotGraph(all_vals, range(epochs*2))
-
 def output_vals(all_vals):
     with open("result.csv", "w") as file:
         file.write("epoch, with mv, without mv\n")
         for val in all_vals:
             file.write(val + "\n") 
-
-
-#def plotGraph(x, y):
-    # plt.ion()
-    # plt.figure("Test Figure")
-    # plt.plot(x,y)
-    # plt.show()
-    #print(x)
-    #print(y)
-
-
-
 
 
 #runTest(int(sys.argv[1]), new_utterance, old_utterance)
