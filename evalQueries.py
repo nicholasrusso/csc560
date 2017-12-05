@@ -4,44 +4,68 @@ import time
 import subprocess
 from pgWrapper import *
 from tqdm import *
-import matplotlib.pylab as plt
 
-dir = "/Users/nicholasrusso/Desktop/grad/560/project/csc560/"
+# File names for query subsets.
 old_person_term_queries = "small_test.psql"
 new_person_term_queries = "small_test_mv.psql"
 old_utterance = "utterance_old.psql"
 new_utterance = "utterance_new.psql"
 
 
+
+'''
+Runs all queries in a file.
+:param filename: string filename of query file.
+:returns: The total excution time for those queries. 
+'''
 def runAll(filename):
     start_time = time.time()
-    result = subprocess.check_output("psql -Upostgres -f " + filename, shell=True)
+    result = subprocess.check_output("psql -Upostgres -hdatabase -f " + filename, shell=True)
     end = time.time() - start_time
     return (end, result)
 
+'''
+Writes values to a file.
+:param file: The open file object
+:param val: The string result of running the query.
+'''
 def writeToFile(file, val):
     val = str(val[1])
     for line in val.split("\\n"):
         file.write(line)
 
+'''
+Runs two query files, one that has modified queries with 
+our new MVs and one without our MVs. The ouputs are stored
+and tested against each other to check if the outputs are
+equivalent. The process happens n number of times defined
+by epochs. Total and average runtimes are display on screen
+when the test hash finished.
+:param epochs: The number of times to run the test.
+:new_queries: The file name of the query file with MVs.
+:old_queries: The file name of the query file without MVs.
+'''
 def runTest(epochs, new_queries, old_queries):
     mv_time = 0;
     no_mv_time  = 0;
     all_vals = list()
     mv_f = open("mv.out", "w")
     no_mv_f = open("no_mv.out", "w")
-    print("Starting Test\nCaching Data")
-    runAll(dir + new_queries)
-    runAll(dir + old_queries)
+
+    print("\n\nStarting Test")
+    print("Dropping Materialzed Views")
+    print("\nCaching Data")
+    runAll(new_queries)
+    runAll(old_queries)
 
     print("\nRunning " + str(epochs) + " Tests\n")
     for i in tqdm(range(epochs)):
         if i % 2 == 0:
-            mv = runAll(dir + new_queries)
-            no_mv = runAll(dir + old_queries)
+            mv = runAll(new_queries)
+            no_mv = runAll(old_queries)
         else:
-            no_mv = runAll(dir + old_queries)
-            mv = runAll(dir + new_queries)
+            no_mv = runAll(old_queries)
+            mv = runAll(new_queries)
 
         all_vals.append(str(i) + ", " + str(mv[0]) + ", " + str(no_mv[0]))
 
@@ -56,13 +80,19 @@ def runTest(epochs, new_queries, old_queries):
     no_mv_f.close()
     output_vals(all_vals)
 
-    print("\nFinished\nTotal runtime with MVs: ", mv_time)
+    print("\n\nFinished\nTotal runtime with MVs: ", mv_time)
     print("Total runtime without MVs:    ", no_mv_time)
     print("Total runtime difference: ", no_mv_time - mv_time)
-    print("Average runtime with MVs: ", mv_time/epochs)
+    print("\n\nAverage runtime with MVs: ", mv_time/epochs)
     print("Average runtime without MVs: ", no_mv_time/epochs)
-    print("Total runtime difference: ", (no_mv_time - mv_time)/epochs)
+    print("Average total runtime difference: ", (no_mv_time - mv_time)/epochs)
 
+'''
+Writes a list of times to a file to 
+be used to analyze data and generate graphs.
+:param all_vals: a list of strings formated
+                 "epoch, time with MVs, time without MVs"
+'''
 def output_vals(all_vals):
     with open("result.csv", "w") as file:
         file.write("epoch, with mv, without mv\n")
@@ -70,5 +100,8 @@ def output_vals(all_vals):
             file.write(val + "\n") 
 
 
-#runTest(int(sys.argv[1]), new_utterance, old_utterance)
+print("Running Utterance_Term Test")
+runTest(int(sys.argv[1]), new_utterance, old_utterance)
+
+print("\n\nRunning Person_Term Test")
 runTest(int(sys.argv[1]), new_person_term_queries, old_person_term_queries)

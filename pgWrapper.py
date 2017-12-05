@@ -1,5 +1,8 @@
 import psycopg2
 
+'''
+Class for interacting with the database.
+'''
 class pgWrapper(object):
     def __init__(self, database, user, password, host = "localhost"):
         self.connection = self.connect(database, user, password, host)
