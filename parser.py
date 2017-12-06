@@ -1,6 +1,10 @@
 import json
 
-from mypgparse import queryToJsonTree
+try:
+    from mypgparse import queryToJsonTree
+except ImportError:
+    print('Could not load mypgparse.queryToJsonTree, trying mypgparse.do_parse')
+    from mypgparse import do_parse as queryToJsonTree
 
 SELECT_STMT = 'SelectStmt'
 FROM_CLAUSE = 'fromClause'
@@ -482,6 +486,9 @@ class Query(object):
 
     def replaceTable(self, targetTable, replacementTable):
         """
+        TODO: Probably should take a list of target tables so we know every table
+            that will be replaced immediately, and can remove joins between those tables.
+
         Replace all references of targetTable with replacementTable in
             tables and column references.
         :param targetTable: str
