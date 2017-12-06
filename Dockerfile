@@ -10,13 +10,5 @@ RUN pip3 install -r requirements.txt
 WORKDIR /project/libpg_query-9.5-latest/
 RUN make python
 WORKDIR /project
-# RUN service postgresql restart
-# RUN su postgres
-# RUN sleep 10s
-# RUN psql -f /project/setPostgresRole.sql
-# RUN exit
-# RUN rm /etc/postgresql/9.4/main/pg_hba.conf
-# COPY pg_hba.conf /etc/postgresql/9.4/main/
-# RUN service postgresql restart
 
 ENTRYPOINT sleep infinity
