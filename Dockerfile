@@ -1,5 +1,5 @@
 FROM python:3.5
-RUN apt-get update && apt-get install gcc build-essential python3-dev php5-pgsql postgresql vim --assume-yes
+RUN apt-get update && apt-get install gcc build-essential python3-dev php5-pgsql postgresql vim unzip --assume-yes
 ENV PYTHON_35_INCLUDE /usr/include/python3.4m/Python.h
 ENV PYTHON_35_LIB /usr/lib/python3.4/config-3.4m-x86_64-linux-gnu
 ENV POSTGRES_LIB /usr/lib/postgresql/9.4/lib
