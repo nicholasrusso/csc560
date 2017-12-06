@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Use this script to run our entire project.
-printf "Demo Starting..."
+printf "Demo Starting...\n"
 printf "Deleting Previous Materialzed Views"
-psql -Upostgres -hdatabase -f dropM.psql > dev/null
+psql -Upostgres -hdatabase -f dropM.psql > /dev/null 2>&1
 printf "\nParsing and Creating Materialzed Views"
 python3 train.py queries.sql
 printf "\nConverting Queries"
