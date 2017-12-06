@@ -31,8 +31,8 @@ Writes values to a file.
 '''
 def writeToFile(file, val):
     val = str(val[1])
-    for line in val.split("\\n"):
-        file.write(line)
+    val = val.replace("\\n", "\n")
+    file.write(val)
 
 '''
 Runs two query files, one that has modified queries with 
@@ -53,7 +53,6 @@ def runTest(epochs, new_queries, old_queries):
     no_mv_f = open("no_mv.out", "w")
 
     print("\n\nStarting Test")
-    print("Dropping Materialzed Views")
     print("\nCaching Data")
     runAll(new_queries)
     runAll(old_queries)
@@ -69,12 +68,13 @@ def runTest(epochs, new_queries, old_queries):
 
         all_vals.append(str(i) + ", " + str(mv[0]) + ", " + str(no_mv[0]))
 
-        if mv[1] != no_mv[1]:
-            raise ValueError("Error: Query results did not match")
+        
         mv_time += mv[0]
         no_mv_time += no_mv[0]
         writeToFile(mv_f, mv)
         writeToFile(no_mv_f, no_mv)
+        if mv[1] != no_mv[1]:
+            raise ValueError("Error: Query results did not match")
     
     mv_f.close()
     no_mv_f.close()
@@ -99,9 +99,6 @@ def output_vals(all_vals):
         for val in all_vals:
             file.write(val + "\n") 
 
-
-print("Running Utterance_Term Test")
-runTest(int(sys.argv[1]), new_utterance, old_utterance)
 
 print("\n\nRunning Person_Term Test")
 runTest(int(sys.argv[1]), new_person_term_queries, old_person_term_queries)
