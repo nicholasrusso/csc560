@@ -1,8 +1,13 @@
 from sys import argv
 from json import loads
 
-from mypgparse import queryToJsonTree
 from parser import *
+
+try:
+    from mypgparse import queryToJsonTree
+except ImportError:
+    print('Could not load mypgparse.queryToJsonTree, trying mypgparse.do_parse')
+    from mypgparse import do_parse as queryToJsonTree
 
 
 def parseFile(fileName):
