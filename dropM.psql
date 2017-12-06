@@ -1,0 +1,10 @@
+\connect test
+drop materialized view billdiscussion_hearing;
+drop materialized view hearing_billdiscussion;
+drop materialized view utterance_billdiscussion;
+drop materialized view utterance_term;
+drop materialized view utterance_person;
+drop materialized view bill_billdiscussion;
+drop materialized view billdiscussion_bill;
+drop materialized view person_term;
+drop materialized view person_utterance;
