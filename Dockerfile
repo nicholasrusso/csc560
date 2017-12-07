@@ -8,6 +8,7 @@ WORKDIR /project
 COPY . .
 RUN pip3 install -r requirements.txt
 WORKDIR /project/libpg_query-9.5-latest/
+RUN make clean
 RUN make python
 WORKDIR /project
 
