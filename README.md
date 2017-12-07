@@ -16,4 +16,4 @@ NOTE: These instructions assume all commands are run from the top-level project 
 4. Run `./db_create.sh` from within Docker container.
 5. From within the Docker container's bash session, run `./demo.sh` to run a quick system test and print a comparison between running the given queries without our automated materialized views and with our automated materialized views.
 6. To exit the Docker container, run `exit` or press `ctrl + d`.
-7. To stop the running Docker container, run `./stop_docker.sh`.
+7. To stop the running Docker container, run `./stop_containers.sh`.
